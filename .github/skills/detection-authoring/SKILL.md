@@ -22,16 +22,15 @@ This skill deploys **custom detection rules** to Microsoft Defender XDR via the 
 ## 📑 TABLE OF CONTENTS
 
 1. **[Prerequisites](#prerequisites)** — Auth, scopes, PowerShell modules
-2. **[Critical Rules](#-critical-rules---read-first-)** — Mandatory constraints
-3. **[Query Adaptation](#query-adaptation)** — Sentinel KQL → Custom Detection format
-4. **[API Reference](#api-reference)** — Graph API schema and field values
-5. **[Frequency & Lookback](#frequency--lookback)** — Schedule periods, lookback windows, NRT constraints
-6. **[Deployment Workflow](#deployment-workflow)** — Step-by-step process
-7. **[Batch Deployment](#batch-deployment)** — Manifest-driven multi-rule deployment
-8. **[Lifecycle Management](#lifecycle-management)** — CRUD operations
+2. **[Critical Rules](#-critical-rules---read-first-)** — Mandatory constraints (includes query adaptation checklist)
+3. **[API Reference](#api-reference)** — Graph API schema and field values
+4. **[Frequency & Lookback](#frequency--lookback)** — Schedule periods, lookback windows, NRT constraints
+5. **[Deployment Workflow](#deployment-workflow)** — Step-by-step process
+6. **[Batch Deployment](#batch-deployment)** — Manifest-driven multi-rule deployment
+7. **[Lifecycle Management](#lifecycle-management)** — CRUD operations
+8. **[Existing Rule Discovery](#existing-rule-discovery)** — Search Analytic Rules & Custom Detections by table, EventID, or keyword
 9. **[Known Pitfalls](#known-pitfalls)** — Lessons learned (13 pitfalls documented)
 10. **[CD Metadata Contract](#cd-metadata-contract)** — Schema for query file ↔ detection skill coordination
-11. **[Query Library Reference](#query-library-reference)** — Deployable query catalog
 
 ---
 
@@ -338,7 +337,7 @@ Not all tables support NRT frequency. Use NRT only with these tables:
 
 ### Ingestion Lag Consideration — NRT Suitability
 
-A table being NRT-supported means the API **accepts** NRT rules — not that NRT is the right choice. If a table's ingestion lag exceeds the detection frequency benefit, NRT adds overhead with no detection speed improvement. See [Pitfall 12](#pitfall-12-nrt-supported--nrt-practical--check-ingestion-lag) for a per-table assessment. **Rule of thumb: if ingestion lag > 30 min, use 1H scheduled instead.**
+A table being NRT-supported means the API **accepts** NRT rules — not that NRT is the right choice. If a table's ingestion lag exceeds the detection frequency benefit, NRT adds overhead with no detection speed improvement. See [Pitfall 12](#pitfall-12-nrt-supported--nrt-practical--check-ingestion-lag) for a per-table ingestion lag assessment and recommendation matrix. **Rule of thumb: if ingestion lag > 30 min, use 1H scheduled instead.**
 
 ### Custom Frequency (Sentinel Data Only)
 
@@ -534,6 +533,135 @@ Invoke-MgGraphRequest -Method PATCH `
 
 ---
 
+## Existing Rule Discovery
+
+Before authoring new custom detections, check what Analytic Rules (Sentinel) and Custom Detection rules (Defender XDR) already exist for the same table, EventID, or keyword. This avoids duplicating coverage and helps identify gaps.
+
+### Step 0: Construct the Analytic Rules URL (once per session)
+
+```powershell
+$cfg = Get-Content config.json | ConvertFrom-Json
+$sub = $cfg.subscription_id
+$rg  = $cfg.azure_mcp.resource_group
+$ws  = $cfg.azure_mcp.workspace_name
+$arUrl = "https://management.azure.com/subscriptions/$sub/resourceGroups/$rg/providers/Microsoft.OperationalInsights/workspaces/$ws/providers/Microsoft.SecurityInsights/alertRules?api-version=2024-09-01"
+
+# Verify (should return rule count)
+az rest --method get --url $arUrl --query "length(value)" -o tsv 2>$null
+```
+
+> All patterns below reuse `$arUrl`. The Sentinel REST API returns the full KQL query text for every rule — there is no server-side content filtering, so we pull all rules in one call and filter client-side with JMESPath `contains()`.
+
+### Search Analytic Rules by Table Name or Keyword
+
+```powershell
+# Which rules reference a specific table? (e.g., SecurityEvent)
+az rest --method get --url $arUrl `
+  --query "value[?properties.query && contains(properties.query, 'SecurityEvent')].{name: properties.displayName, severity: properties.severity, enabled: properties.enabled}" `
+  -o table 2>$null
+```
+
+### Search Analytic Rules by EventID
+
+```powershell
+# Which rules reference a specific EventID?
+az rest --method get --url $arUrl `
+  --query "value[?properties.query && contains(properties.query, '<EventID>')].{name: properties.displayName, severity: properties.severity, enabled: properties.enabled}" `
+  -o table 2>$null
+```
+
+To see the surrounding KQL context of a match:
+
+```powershell
+az rest --method get --url $arUrl `
+  --query "value[?properties.query && contains(properties.query, '<EventID>')].properties.query" `
+  -o tsv 2>$null | Select-String -Pattern '<EventID>' -Context 1,1
+```
+
+### Search Analytic Rules for ASIM Parser Dependencies
+
+```powershell
+$rules = az rest --method get --url $arUrl `
+  --query "value[?properties.enabled==``true`` && properties.query].{displayName: properties.displayName, query: properties.query}" `
+  -o json 2>$null | ConvertFrom-Json
+
+$asimRules = $rules | Where-Object { $_.query -match '_Im_|_ASim_' }
+$asimRules | ForEach-Object {
+    $schemas = [regex]::Matches($_.query, '_Im_(\w+)') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+    Write-Host "$($_.displayName): $($schemas -join ', ')"
+}
+```
+
+### Dump All Enabled Rule Queries for Local Search
+
+```powershell
+az rest --method get --url $arUrl `
+  --query "value[?properties.enabled==``true`` && properties.query].{name: properties.displayName, query: properties.query}" `
+  -o json > temp/analytic_rule_queries.json
+
+# Then search locally for any pattern
+Get-Content temp/analytic_rule_queries.json | Select-String -Pattern 'EventID\s*(==|in\s*\(|has|contains)' -AllMatches
+```
+
+### Search Custom Detection Rules (Graph API)
+
+**⚠️ Important:** The Graph MCP server returns 403 for the Custom Detection endpoint. Always use `Invoke-MgGraphRequest` via the terminal.
+
+```powershell
+Import-Module Microsoft.Graph.Authentication -ErrorAction Stop
+
+$ctx = Get-MgContext
+if (-not $ctx -or $ctx.Scopes -notcontains 'CustomDetection.Read.All') {
+    Connect-MgGraph -Scopes 'CustomDetection.Read.All' -NoWelcome
+}
+
+$response = Invoke-MgGraphRequest -Method GET `
+    -Uri '/beta/security/rules/detectionRules?$select=id,displayName,isEnabled,queryCondition,schedule,lastRunDetails,createdDateTime,lastModifiedDateTime' `
+    -OutputType PSObject
+```
+
+Then filter by table name or keyword:
+
+```powershell
+# Which CD rules reference SecurityEvent?
+$response.value | Where-Object { $_.queryCondition.queryText -match 'SecurityEvent' } |
+    Select-Object displayName, isEnabled, @{N='Query';E={$_.queryCondition.queryText}}
+
+# Which CD rules reference a specific EventID?
+$response.value | Where-Object { $_.queryCondition.queryText -match '4688|ProcessCreate' } |
+    Select-Object displayName, isEnabled, @{N='Query';E={$_.queryCondition.queryText}}
+```
+
+Identify stale rules (no run in 90 days):
+
+```powershell
+$cutoff = (Get-Date).AddDays(-90).ToString('yyyy-MM-ddTHH:mm:ssZ')
+$response.value | Where-Object {
+    $_.lastRunDetails.lastRunDateTime -and $_.lastRunDetails.lastRunDateTime -lt $cutoff
+} | Select-Object displayName, isEnabled,
+    @{N='LastRun';E={$_.lastRunDetails.lastRunDateTime}},
+    @{N='Status';E={$_.lastRunDetails.status}}
+```
+
+### Key API Fields for Rule Discovery
+
+| Source | Field Path | Content |
+|--------|------------|---------|
+| **Analytic Rules** (REST) | `properties.displayName` | Rule name |
+| | `properties.query` | Full KQL query text |
+| | `properties.severity` | High / Medium / Low / Informational |
+| | `properties.enabled` | `true` / `false` |
+| **Custom Detections** (Graph) | `displayName` | Rule name |
+| | `queryCondition.queryText` | Full KQL query (AH syntax) |
+| | `schedule.period` | `PT1H`, `PT24H`, `PT0S` (continuous) |
+| | `lastRunDetails.lastRunDateTime` | Last execution timestamp |
+| | `lastRunDetails.status` | `completed`, `failed`, `running` |
+| | `isEnabled` | `true` / `false` |
+
+> **Tip:** JMESPath `contains()` (used in `az rest --query`) is case-sensitive. For case-insensitive search, dump to JSON and use PowerShell `-match` instead.
+
+---
+
 ## Known Pitfalls
 
 ### Pitfall 1: `Timestamp` vs `TimeGenerated` — Project As-Is
@@ -619,6 +747,89 @@ Additionally, the query MUST project a column whose name matches the chosen iden
 
 > **DeviceId requirement:** For XDR-native tables (Device\*, Email\*, CloudAppEvents) with a device-type impactedAsset, the query must project `DeviceId` (not just `DeviceName`). Sentinel/LA tables (SecurityEvent, AuditLogs) do not require `DeviceId`.
 
+### Pitfall 10: PowerShell Empty Array Swallowing & `organizationalScope`
+
+**Root cause (Feb 2026):** When using PowerShell `if/else` expressions to assign empty arrays, PowerShell swallows `@()` and produces `$null` instead:
+
+```powershell
+# ❌ BUG — $x becomes $null, NOT an empty array
+$x = if ($false) { @($items) } else { @() }
+# Result: $null
+
+# ✅ CORRECT — assign first, then overwrite conditionally
+$x = @()
+if ($condition) { $x = @($items) }
+# Result: empty Object[] (serializes to [])
+```
+
+This caused array fields like `responseActions` and `mitreTechniques` to serialize as `null` instead of `[]`, which the API rejects with `400 Bad Request`.
+
+**Combined with `organizationalScope: null`** — including this field explicitly (even as `null`) was also rejected. The fix: omit `organizationalScope` entirely and use direct assignment for array fields.
+
+**Symptoms:** All rules in a batch return `400 Bad Request`, but some may be silently created (see [Pitfall 2](#pitfall-2-silent-rule-creation-on-error-responses-400-and-409)). Manual deployment of the same rule body (without the null fields) succeeds.
+
+**Fixed in:** [Deploy-CustomDetections.ps1](Deploy-CustomDetections.ps1) — array fields now use direct assignment, `organizationalScope` removed from body.
+
+### Pitfall 11: `tostring()` on Dynamic Columns Rejected in NRT Mode
+
+**Root cause (Feb 2026):** NRT rules (`schedule: "0"`) reject `tostring()` wrapping dynamic-typed columns. The API returns a generic `400 Bad Request` with no useful error message — similar to the `let` rejection described in [NRT Constraints](#nrt-constraints). The same query deploys successfully as a scheduled rule (1H+).
+
+**Example — AzureActivity table:**
+
+```kql
+// ❌ FAILS in NRT mode — tostring() on dynamic column
+AzureActivity
+| where OperationNameValue =~ "MICROSOFT.SECURITY/PRICINGS/WRITE"
+| where tostring(Properties_d.pricings_pricingTier) == "Free"
+
+// ✅ WORKS — use the native string column instead
+AzureActivity
+| where OperationNameValue =~ "MICROSOFT.SECURITY/PRICINGS/WRITE"
+| where Properties has '"pricingTier":"Free"'
+```
+
+**Workarounds:**
+1. **Prefer native string columns** — many Sentinel tables have both a dynamic column (e.g., `Properties_d`) and a string column (e.g., `Properties`). Use the string column with `has` or `contains` for NRT.
+2. **Switch to 1H schedule** — if `tostring()` is required for precise extraction, use a scheduled rule where it works reliably.
+
+**Ingestion lag consideration:** Even when a table is NRT-supported, check whether ingestion lag makes NRT impractical — see [Ingestion Lag Consideration](#ingestion-lag-consideration--nrt-suitability).
+
+### Pitfall 12: NRT-Supported ≠ NRT-Practical — Check Ingestion Lag
+
+A table appearing in the [NRT-Supported Tables](#nrt-supported-tables) list means the API **accepts** NRT rules for that table — it does NOT mean NRT adds value. Tables with significant ingestion lag negate the benefit of continuous detection.
+
+| Table | Typical Ingestion Lag | NRT Practical? | Recommendation |
+|-------|-----------------------|----------------|----------------|
+| `DeviceEvents`, `DeviceProcessEvents` | < 5 min | ✅ Yes | NRT is effective |
+| `SigninLogs`, `AuditLogs` | 5-15 min | ⚠️ Marginal | 1H is usually sufficient |
+| `AzureActivity` | 3-20 min ([docs](https://learn.microsoft.com/azure/azure-monitor/logs/data-ingestion-time)) | ⚠️ Marginal | Evaluate per use case |
+| `SecurityEvent` | < 5 min | ✅ Yes | NRT is effective |
+| `OfficeActivity` | 15-60 min | ⚠️ Marginal | Evaluate per use case |
+
+**Rule of thumb:** If the table's ingestion lag exceeds 30 minutes, use a 1H scheduled rule instead of NRT. The detection latency is dominated by ingestion lag, not rule frequency.
+
+### Pitfall 13: `impactedAssets` Must Be Non-Empty
+
+**Root cause (Feb 2026):** The Graph API requires `impactedAssets` to contain **at least 1 element**. Sending an empty array (`"impactedAssets": []`) returns `400 BadRequest` with `InvalidInput` code and the message: *"The field ImpactedAssets must be a string or array type with a minimum length of '1'."*
+
+This error is particularly difficult to diagnose because:
+- The error message only appears in some response formats — when using `Invoke-MgGraphRequest` with raw JSON strings, the `"message"` field is often **empty** (`""`)
+- The actual error text only surfaced when using `ConvertTo-Json` on a PowerShell hashtable body
+- All other fields in the payload may be valid, making it seem like a server-side issue
+
+**Every custom detection must declare at least one impacted entity.** Choose the most relevant asset type for the detection:
+
+| Detection Focus | Asset Type | Example Identifier |
+|----------------|------------|--------------------|
+| Email-based threats | `impactedMailboxAsset` | `recipientEmailAddress`, `senderFromAddress` |
+| User activity | `impactedUserAsset` | `accountUpn`, `accountObjectId` |
+| Endpoint/device | `impactedDeviceAsset` | `deviceId`, `deviceName` |
+
+**Prevention:**
+- Always include at least one `impactedAssets` entry in manifests and API payloads
+- The companion script [Deploy-CustomDetections.ps1](Deploy-CustomDetections.ps1) validates this at manifest load time and rejects rules with empty `impactedAssets` before calling the API
+- Review the [Impacted Asset Types](#impacted-asset-types) section for the full list of valid identifiers per asset type
+
 ---
 
 ## CD Metadata Contract
@@ -630,7 +841,7 @@ Query files in `queries/` can include per-query **cd-metadata blocks** that prov
 When a query in `queries/` includes a cd-metadata block, the detection authoring skill uses it to:
 - Pre-populate manifest fields (`schedule`, `severity`, `category`, `title`, `impactedAssets`, etc.)
 - Skip manual CD-readiness assessment — the block declares readiness explicitly
-- Generate the adapted CD query by applying the [Query Adaptation](#query-adaptation) checklist to the Sentinel query in the same section
+- Generate the adapted CD query by applying the [Query Adaptation Checklist](#query-adaptation-checklist) to the Sentinel query in the same section
 
 ### Schema
 
@@ -690,96 +901,7 @@ This explicitly documents the assessment so the detection skill doesn't re-evalu
 
 1. **User says "deploy query 8 as a custom detection"** → Skill reads the query file, finds the cd-metadata block for Query 8
 2. **Pre-populates manifest entry** from cd-metadata fields (schedule, category, severity, title, impactedAssets)
-3. **Applies [Query Adaptation](#query-adaptation) checklist** to the Sentinel KQL query in that section
+3. **Applies [Query Adaptation Checklist](#query-adaptation-checklist)** to the Sentinel KQL query in that section
 4. **Deploys** via Graph API or generates manifest JSON for batch deployment
 
-If a query file has **no cd-metadata blocks**, the skill falls back to the manual Query Library Reference table below.
-
-
-
----
-
-## Additional Pitfalls (Discovered in Practice)
-
-### Pitfall 10: PowerShell Empty Array Swallowing & `organizationalScope`
-
-**Root cause (Feb 2026):** When using PowerShell `if/else` expressions to assign empty arrays, PowerShell swallows `@()` and produces `$null` instead:
-
-```powershell
-# ❌ BUG — $x becomes $null, NOT an empty array
-$x = if ($false) { @($items) } else { @() }
-# Result: $null
-
-# ✅ CORRECT — assign first, then overwrite conditionally
-$x = @()
-if ($condition) { $x = @($items) }
-# Result: empty Object[] (serializes to [])
-```
-
-This caused array fields like `responseActions` and `mitreTechniques` to serialize as `null` instead of `[]`, which the API rejects with `400 Bad Request`.
-
-**Combined with `organizationalScope: null`** — including this field explicitly (even as `null`) was also rejected. The fix: omit `organizationalScope` entirely and use direct assignment for array fields.
-
-**Symptoms:** All rules in a batch return `400 Bad Request`, but some may be silently created (see [Pitfall 2](#pitfall-2-silent-rule-creation-on-error-responses-400-and-409)). Manual deployment of the same rule body (without the null fields) succeeds.
-
-**Fixed in:** [Deploy-CustomDetections.ps1](Deploy-CustomDetections.ps1) — array fields now use direct assignment, `organizationalScope` removed from body.
-
-### Pitfall 11: `tostring()` on Dynamic Columns Rejected in NRT Mode
-
-**Root cause (Feb 2026):** NRT rules (`schedule: "0"`) reject `tostring()` wrapping dynamic-typed columns. The API returns a generic `400 Bad Request` with no useful error message — identical to the `let` rejection in [Pitfall 10](#pitfall-10-powershell-empty-array-swallowing--organizationalscope). The same query deploys successfully as a scheduled rule (1H+).
-
-**Example — AzureActivity table:**
-
-```kql
-// ❌ FAILS in NRT mode — tostring() on dynamic column
-AzureActivity
-| where OperationNameValue =~ "MICROSOFT.SECURITY/PRICINGS/WRITE"
-| where tostring(Properties_d.pricings_pricingTier) == "Free"
-
-// ✅ WORKS — use the native string column instead
-AzureActivity
-| where OperationNameValue =~ "MICROSOFT.SECURITY/PRICINGS/WRITE"
-| where Properties has '"pricingTier":"Free"'
-```
-
-**Workarounds:**
-1. **Prefer native string columns** — many Sentinel tables have both a dynamic column (e.g., `Properties_d`) and a string column (e.g., `Properties`). Use the string column with `has` or `contains` for NRT.
-2. **Switch to 1H schedule** — if `tostring()` is required for precise extraction, use a scheduled rule where it works reliably.
-
-**Ingestion lag consideration:** Even when a table is NRT-supported, check whether ingestion lag makes NRT impractical — see [Ingestion Lag Consideration](#ingestion-lag-consideration--nrt-suitability).
-
-### Pitfall 12: NRT-Supported ≠ NRT-Practical — Check Ingestion Lag
-
-A table appearing in the [NRT-Supported Tables](#nrt-supported-tables) list means the API **accepts** NRT rules for that table — it does NOT mean NRT adds value. Tables with significant ingestion lag negate the benefit of continuous detection.
-
-| Table | Typical Ingestion Lag | NRT Practical? | Recommendation |
-|-------|-----------------------|----------------|----------------|
-| `DeviceEvents`, `DeviceProcessEvents` | < 5 min | ✅ Yes | NRT is effective |
-| `SigninLogs`, `AuditLogs` | 5-15 min | ⚠️ Marginal | 1H is usually sufficient |
-| `AzureActivity` | 3-20 min ([docs](https://learn.microsoft.com/azure/azure-monitor/logs/data-ingestion-time)) | ⚠️ Marginal | Evaluate per use case |
-| `SecurityEvent` | < 5 min | ✅ Yes | NRT is effective |
-| `OfficeActivity` | 15-60 min | ⚠️ Marginal | Evaluate per use case |
-
-**Rule of thumb:** If the table's ingestion lag exceeds 30 minutes, use a 1H scheduled rule instead of NRT. The detection latency is dominated by ingestion lag, not rule frequency.
-
-### Pitfall 13: `impactedAssets` Must Be Non-Empty
-
-**Root cause (Feb 2026):** The Graph API requires `impactedAssets` to contain **at least 1 element**. Sending an empty array (`"impactedAssets": []`) returns `400 BadRequest` with `InvalidInput` code and the message: *"The field ImpactedAssets must be a string or array type with a minimum length of '1'."*
-
-This error is particularly difficult to diagnose because:
-- The error message only appears in some response formats — when using `Invoke-MgGraphRequest` with raw JSON strings, the `"message"` field is often **empty** (`""`)
-- The actual error text only surfaced when using `ConvertTo-Json` on a PowerShell hashtable body
-- All other fields in the payload may be valid, making it seem like a server-side issue
-
-**Every custom detection must declare at least one impacted entity.** Choose the most relevant asset type for the detection:
-
-| Detection Focus | Asset Type | Example Identifier |
-|----------------|------------|--------------------|
-| Email-based threats | `impactedMailboxAsset` | `recipientEmailAddress`, `senderFromAddress` |
-| User activity | `impactedUserAsset` | `accountUpn`, `accountObjectId` |
-| Endpoint/device | `impactedDeviceAsset` | `deviceId`, `deviceName` |
-
-**Prevention:**
-- Always include at least one `impactedAssets` entry in manifests and API payloads
-- The companion script [Deploy-CustomDetections.ps1](Deploy-CustomDetections.ps1) validates this at manifest load time and rejects rules with empty `impactedAssets` before calling the API
-- Review the [Impacted Asset Types](#impacted-asset-types) section for the full list of valid identifiers per asset type
+If a query file has **no cd-metadata blocks**, the skill assesses CD-readiness manually based on the query structure and the [Query Adaptation Checklist](#query-adaptation-checklist).
