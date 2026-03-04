@@ -503,7 +503,7 @@ adaptation_notes: "Remove let blocks, add mandatory columns"
 | `cd_ready` | Always | `true` or `false` — explicitly declare CD suitability |
 | `schedule` | If cd_ready | `"0"` (NRT), `"1H"`, `"3H"`, `"12H"`, `"24H"` |
 | `category` | If cd_ready | API category value (e.g., `Persistence`, `LateralMovement`, `Discovery`) |
-| `title` | Optional | Dynamic title with `{{ColumnName}}` placeholders |
+| `title` | Optional | Dynamic title with `{{ColumnName}}` placeholders. **Max 3 unique `{{Column}}` refs across title + description combined** (Graph API limit; see detection-authoring skill Pitfall 14) |
 | `impactedAssets` | If cd_ready | Array of `type` + `identifier` pairs |
 | `recommendedActions` | Optional | Triage guidance string |
 | `adaptation_notes` | Optional | What needs to change for CD format |

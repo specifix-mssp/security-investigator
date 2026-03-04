@@ -70,6 +70,15 @@ function Build-RuleBody {
         throw "impactedAssets must contain at least 1 element. The API rejects empty arrays."
     }
 
+    # Validate max 3 unique dynamic {{Column}} references across title + description combined
+    # Graph API rejects >3 with 400: "Dynamic properties in alertTitle and alertDescription must not exceed 3 fields"
+    $alertTitle = if ($Rule.PSObject.Properties['title'] -and $Rule.title) { $Rule.title } else { $Rule.displayName }
+    $combinedText = "$alertTitle $($Rule.description)"
+    $dynamicCols = [regex]::Matches($combinedText, '\{\{(\w+)\}\}') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
+    if ($dynamicCols.Count -gt 3) {
+        throw "title + description contain $($dynamicCols.Count) unique dynamic columns ($($dynamicCols -join ', ')) — max 3 allowed. Remove or inline some as static text."
+    }
+
     $impactedAssets = @()
     foreach ($asset in $Rule.impactedAssets) {
         $odataType = switch ($asset.type) {

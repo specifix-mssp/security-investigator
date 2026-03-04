@@ -109,6 +109,7 @@ When converting a Sentinel query to custom detection format:
 7. ✅ Validate via Advanced Hunting dry-run before deployment
 8. ✅ For NRT rules: avoid `tostring()` on dynamic columns — use native string columns instead (e.g., `Properties` instead of `tostring(Properties_d)`). See [Pitfall 11](#pitfall-11-tostring-on-dynamic-columns-rejected-in-nrt-mode).
 9. ✅ For NRT rules: verify the table's ingestion lag justifies NRT. See [Pitfall 12](#pitfall-12-nrt-supported--nrt-practical--check-ingestion-lag).
+10. ✅ Count unique `{{Column}}` references across `title` AND `description` combined — **max 3 unique columns total** (shared across both fields, not per-field). Exceeding this returns `400 Bad Request`: *"Dynamic properties in alertTitle and alertDescription must not exceed 3 fields"*. See [Pitfall 14](#pitfall-14-max-3-unique-dynamic-columns-across-title--description).
 
 > **Performance tip (from MS Learn):** "Avoid filtering custom detections by using the `Timestamp` column. The data used for custom detections is prefiltered based on the detection frequency." Use `ingestion_time()` instead — it aligns with the platform's pre-filtering for better performance. For scheduled rules, match the time filter to the run frequency (`ingestion_time() > ago(1h)` for 1H rules). For NRT rules, no time filter is needed.
 
@@ -830,6 +831,21 @@ This error is particularly difficult to diagnose because:
 - The companion script [Deploy-CustomDetections.ps1](Deploy-CustomDetections.ps1) validates this at manifest load time and rejects rules with empty `impactedAssets` before calling the API
 - Review the [Impacted Asset Types](#impacted-asset-types) section for the full list of valid identifiers per asset type
 
+### Pitfall 14: Max 3 Unique Dynamic Columns Across Title + Description
+
+The Graph API enforces **3 unique `{{Column}}` references** across `title` and `description` **combined** (not per field). Exceeding this returns `400 Bad Request` — often with an empty error message via `Invoke-MgGraphRequest`.
+
+**⚠️ MS Learn discrepancy:** Docs say 3 per field; the API empirically enforces 3 unique total across both fields (confirmed Mar 2026).
+
+| Scenario | Unique Columns | Result |
+|----------|---------------|--------|
+| `title`: `{{A}} {{B}}`, `description`: `{{A}} {{C}}` | A, B, C = 3 | ✅ Accepted |
+| `title`: `{{A}} {{B}}`, `description`: `{{C}} {{D}}` | A, B, C, D = 4 | ❌ 400 Bad Request |
+
+**Counting:** Reuse across fields is free (`{{A}}` in both = 1). Count distinct names, not occurrences.
+
+**Workaround:** Replace excess `{{Column}}` refs with static text, or use `customDetails` (up to 20 KVPs) to surface extra columns in the alert side panel. [Deploy-CustomDetections.ps1](Deploy-CustomDetections.ps1) validates this at manifest load time.
+
 ---
 
 ## CD Metadata Contract
@@ -878,7 +894,7 @@ adaptation_notes: "Straightforward — already row-level, add mandatory columns"
 | `cd_ready` | Yes | `true` / `false` | Whether this query can be adapted for custom detection deployment |
 | `schedule` | If cd_ready | `"0"` / `"1H"` / `"3H"` / `"12H"` / `"24H"` | Detection frequency. `"0"` = NRT (single-table, no joins/unions) |
 | `category` | If cd_ready | string | Alert category (see [API Reference](#api-reference) for valid values) |
-| `title` | No | string | Dynamic alert title with `{{ColumnName}}` placeholders. Falls back to query heading if omitted |
+| `title` | No | string | Dynamic alert title with `{{ColumnName}}` placeholders. Falls back to query heading if omitted. **Limit: max 3 unique `{{Column}}` references across `title` AND `description` combined** (see [Pitfall 14](#pitfall-14-max-3-unique-dynamic-columns-across-title--description)) |
 | `impactedAssets` | If cd_ready | array | Asset entities to extract. Each entry: `type` (`device`/`user`/`mailbox`) + `identifier` (predefined API value, e.g., `accountUpn`, `deviceName` — see [Impacted Asset Types](#impacted-asset-types)) |
 | `recommendedActions` | No | string | Triage guidance shown in the alert. Omit if not needed |
 | `responseActions` | No | array | **PROHIBITED** — must always be omitted or empty `[]`. Response actions must only be configured manually in the Defender portal |
