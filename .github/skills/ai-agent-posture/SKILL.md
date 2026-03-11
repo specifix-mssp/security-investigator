@@ -29,6 +29,7 @@ AI agents are autonomous or semi-autonomous applications that can access organiz
 **References:**
 - [Microsoft Docs — AIAgentsInfo table](https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-aiagentsinfo-table)
 - [From runtime risk to real-time defense: Securing AI agents](https://www.microsoft.com/en-us/security/blog/2026/01/23/runtime-risk-realtime-defense-securing-ai-agents/) — Microsoft Defender Security Research blog detailing three attack scenarios this skill detects
+- [Microsoft Agent 365: The control plane for AI agents](https://www.microsoft.com/en-us/microsoft-365/blog/2025/11/18/microsoft-agent-365-the-control-plane-for-ai-agents/) — Enterprise governance platform for agent lifecycle management (Registry, Access Control, Visualization, Interoperability, Security)
 - [Securing Copilot Studio agents with Microsoft Defender](https://learn.microsoft.com/en-us/defender-cloud-apps/ai-agent-protection)
 - [Real-time agent protection during runtime (Preview)](https://learn.microsoft.com/en-us/defender-cloud-apps/real-time-agent-protection-during-runtime)
 
@@ -77,6 +78,26 @@ This skill's queries map directly to three attack scenarios documented by Micros
 Microsoft Defender provides **webhook-based runtime inspection** for Copilot Studio agents. Before every tool, topic, or knowledge action is executed, the generative orchestrator sends a webhook to Defender containing the planned invocation context. Defender analyzes intent and destination in real time and can **allow or block** the action before execution.
 
 This is the primary runtime defense against all three scenarios above. When reviewing posture findings from this skill, **always recommend enabling Defender Runtime Protection** for agents flagged as high-risk. See [Real-time agent protection during runtime](https://learn.microsoft.com/en-us/defender-cloud-apps/real-time-agent-protection-during-runtime).
+
+### Governance Framework: Microsoft Agent 365
+
+[Microsoft Agent 365](https://www.microsoft.com/en-us/microsoft-365/blog/2025/11/18/microsoft-agent-365-the-control-plane-for-ai-agents/) is the enterprise **control plane** for AI agents — the platform-level answer to the governance gaps this skill detects. It provides five capabilities that directly map to this skill's risk dimensions:
+
+| Agent 365 Capability | What It Does | Skill Dimensions Addressed |
+|---------------------|-------------|---------------------------|
+| **1. Registry** | Single source of truth for all agents (Entra agent ID). IT can quarantine unsanctioned agents and detect shadow agents. Agent Store for governed discovery. | Agent Inventory (Q1), Creator Governance (Q10), Agent Sprawl (Q11) |
+| **2. Access Control** | Unique agent IDs via Entra. Agent Policy Templates enforce security from day one. Adaptive, risk-based access policies. Least-privilege enforcement. | Unauthenticated Agents (Q4), Access Control Policies (Q3) |
+| **3. Visualization** | Unified dashboard mapping agents ↔ users ↔ resources. Role-based reporting. Compliance logging, e-discovery, and audit trail. | MCP Tool Exposure (Q6), Knowledge Sources (Q7), Creator Governance (Q10) |
+| **4. Interoperability** | Agents access Work IQ (org data, relationships, context). Works across Copilot Studio, Microsoft Foundry, Agent Framework, Agent 365 SDK, and partner platforms. | Knowledge Source Risk (Q7), Tools Inventory (Q12) |
+| **5. Security** | Defense-in-depth via Microsoft Defender (posture + threat detection + runtime protection), Entra (real-time blocking), and Purview (data exposure risk, sensitive data leak prevention, compliance). | XPIA Email Risk (Q5), Credential Hygiene (Q8), HTTP Risk (Q9) |
+
+**How to reference Agent 365 in reports:** When this skill identifies governance gaps (sprawl, missing authentication, uncontrolled tool access), recommend Agent 365 as the strategic platform to address them. Specific mappings:
+
+- **Agent sprawl / no naming conventions** → Agent 365 Registry + quarantine for unsanctioned agents
+- **Missing authentication** → Agent 365 Access Control + Entra agent IDs + Policy Templates
+- **No visibility into agent-resource connections** → Agent 365 Visualization dashboard
+- **Uncontrolled MCP/tool proliferation** → Agent 365 Security + Defender posture management
+- **XPIA / data exfiltration risk** → Agent 365 Security + Purview for real-time data leak prevention
 
 ---
 
@@ -731,7 +752,9 @@ Render the following sections in order. Omit sections only if explicitly noted a
 
 ## Recommendations
 
-> **Key mitigation:** For all high-risk agents, recommend enabling **Microsoft Defender Runtime Protection** — webhook-based real-time inspection that can block malicious tool invocations before execution. See [Real-time agent protection during runtime](https://learn.microsoft.com/en-us/defender-cloud-apps/real-time-agent-protection-during-runtime).
+> **Key mitigation — Runtime:** For all high-risk agents, recommend enabling **Microsoft Defender Runtime Protection** — webhook-based real-time inspection that can block malicious tool invocations before execution. See [Real-time agent protection during runtime](https://learn.microsoft.com/en-us/defender-cloud-apps/real-time-agent-protection-during-runtime).
+
+> **Key mitigation — Governance:** For fleet-wide governance gaps (sprawl, missing auth, uncontrolled tools), recommend adopting **[Microsoft Agent 365](https://www.microsoft.com/en-us/microsoft-365/blog/2025/11/18/microsoft-agent-365-the-control-plane-for-ai-agents/)** as the enterprise control plane — providing centralized Registry (inventory + quarantine), Access Control (Entra agent IDs + Policy Templates), Visualization (agent ↔ resource mapping), and Security (Defender + Purview integration).
 
 1. <emoji> **<Priority action>** — <evidence and rationale>
 2. ...
