@@ -73,6 +73,7 @@ This skill spans **4 files**. Load only the file(s) needed for the current phase
 11. **[Reference: License Benefits](#reference-license-benefits)** - DfS P2 / E5 pool calculations
 12. **[Report Template](#report-template)** - JIT pointer → SKILL-report.md
 13. **[Post-Report Drill-Down Reference](#post-report-drill-down-reference)** - Rule cross-referencing, Custom Detection API, ASIM verification, error handling
+14. **[SVG Dashboard Generation](#svg-dashboard-generation)** - Visual dashboard from completed report
 
 ---
 
@@ -764,3 +765,66 @@ Use these when the user asks follow-up questions after a report is generated (e.
 | **Error Handling** | Common errors from `az rest`, Graph API, `az monitor`; graceful degradation for missing tables; re-running individual PS1 phases |
 | **CloudAppEvents Appendix** | Custom Detection management audit trail (EditCustomDetection events) — distinct from execution telemetry |
 | **Additional References** | Microsoft Learn links for cost optimization, DCR configuration, data tiers, ASIM parsers |
+
+---
+
+## SVG Dashboard Generation
+
+> 📊 **Optional post-report step.** After a report is generated, the user can request a visual SVG dashboard.
+
+**Trigger phrases:** "generate SVG dashboard", "create a visual dashboard", "visualize this report", "SVG from the report"
+
+### User Guide — How to Request a Dashboard
+
+**Scenario A — Same chat session (report was just generated):**
+
+Simply ask:
+```
+Generate an SVG dashboard from the report
+```
+Copilot already has the report data in context and will produce the SVG immediately.
+
+**Scenario B — New chat (report already exists as a file):**
+
+Attach or reference the report file:
+```
+Generate an SVG dashboard from the sentinel ingestion report
+#file:reports/sentinel/sentinel_ingestion_report_<workspace>_<date>.md
+```
+Or drag the report file into chat. Copilot will read the file and generate the dashboard.
+
+**Scenario C — Customization:**
+
+Edit [svg-widgets.yaml](svg-widgets.yaml) before requesting the dashboard. Then ask as above — the renderer reads the YAML at generation time, so changes take effect immediately.
+
+### How It Works (Internal)
+
+1. **Widget manifest:** [svg-widgets.yaml](svg-widgets.yaml) defines the dashboard layout — rows, widgets, data field mappings, and color palette. Edit this file to customize what appears on the dashboard.
+2. **Shared renderer:** [.github/skills/svg-dashboard/SKILL.md](../svg-dashboard/SKILL.md) contains the rendering rules for all widget types — KPI cards, bar charts, line charts, donuts, waterfalls, tables, recommendation cards, assessment banners (Manifest Mode).
+3. **Data source:** The completed report markdown or scratchpad JSON provides the actual values.
+
+### Execution
+
+When the user asks for an SVG dashboard after a report run:
+
+```
+Step 1:  Read svg-widgets.yaml (this skill's widget manifest)
+Step 2:  Read .github/skills/svg-dashboard/SKILL.md (rendering rules — Manifest Mode)
+Step 3:  Read the completed report file (data source)
+         — If same chat: report data is already in context
+         — If new chat: read the file path provided by user or find latest in reports/sentinel/
+Step 4:  Render SVG → save to reports/sentinel/{report_name}_dashboard.svg
+```
+
+### Customization
+
+The YAML manifest controls everything:
+
+| What to Change | Where in YAML | Example |
+|----------------|---------------|----------|
+| Add/remove a KPI card | `rows[1].widgets` | Remove "Data Lake Tables" card |
+| Reorder rows | Move row blocks up/down | Put recommendations before trend chart |
+| Change color scheme | `palette` section | Swap `primary` from teal to blue |
+| Show fewer table rows | Widget's `max_items` | Change top tables from 15 → 10 |
+| Add a new widget row | Append a new `- id:` block | Add a "DL Migration Candidates" table |
+| Adjust canvas size | `canvas.width` / `canvas.height` | 1200×1600 for narrower layout |
