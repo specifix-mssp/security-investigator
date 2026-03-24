@@ -1,0 +1,277 @@
+# SVG Dashboard Widget Manifest — User Scope Drift Report
+#
+# This file defines the layout and data mapping for generating an SVG dashboard
+# from a completed User Scope Drift Detection report. It is consumed by the
+# shared SVG rendering skill at .github/skills/svg-dashboard/SKILL.md
+#
+# Usage:  After generating a user scope drift report, ask:
+#           "Generate an SVG dashboard from the report"
+#         Copilot will read this manifest + the report data + the skill,
+#         then produce a single SVG file in reports/scope-drift/user/.
+#
+# Customization:  Tweak rows, reorder widgets, add/remove items, change colors.
+#                 The renderer adapts to whatever is defined here.
+
+# ─── Canvas ──────────────────────────────────────────────────────────────────
+canvas:
+  width: 1400
+  height: 1100          # 5 rows, 12 widgets — within output token limits
+  background: "#0d1117"
+  padding: 30
+  row_gap: 20
+  col_gap: 20
+  font_family: "Segoe UI, Roboto, sans-serif"
+
+# ─── Color Palette ───────────────────────────────────────────────────────────
+palette:
+  primary: "#409AE1"      # blue   — KPI highlights, primary data
+  secondary: "#b4a0ff"    # purple — secondary charts
+  accent: "#FFC83D"       # yellow — warnings, near-threshold
+  danger: "#EF6950"       # red    — critical findings, flagged entities
+  success: "#40C5AF"      # green  — stable, healthy metrics
+  muted: "#b2b2b2"        # gray   — labels, axis text
+  card_bg: "#161b22"      # dark card background
+  card_border: "#30363d"  # subtle border
+  text_primary: "#e6edf3"
+  text_secondary: "#b2b2b2"
+
+# ─── Drift Status Colors (consistent across all widgets) ────────────────────
+drift_status_colors:
+  critical: "#EF6950"       # red    — Critical / extreme drift (> 250%)
+  above_threshold: "#FF8C00" # orange — Above 150% threshold
+  near_threshold: "#FFC83D"  # yellow — 120–150%
+  stable: "#409AE1"          # blue   — 80–120%
+  contracting: "#40C5AF"     # green  — < 80%
+
+# ─── Dimension Colors ───────────────────────────────────────────────────────
+# Interactive (7 dimensions) and Non-Interactive (6 dimensions) share color map
+dimension_colors:
+  volume: "#409AE1"       # blue
+  apps: "#b4a0ff"         # purple
+  resources: "#FFC83D"    # yellow
+  ips: "#40C5AF"          # green
+  locations: "#EF6950"    # red
+  devices: "#FF8C00"      # orange (interactive only)
+  fail_rate: "#6e7681"    # gray
+
+# ─── Row Definitions ─────────────────────────────────────────────────────────
+# TOKEN-BUDGET LAYOUT: 5 rows, 12 widgets, ~1100px height
+# User drift is unique: TWO drift scores (interactive + non-interactive).
+# Layout splits Row 2 into dual score cards, Row 3 into side-by-side
+# dimension breakdowns for both sign-in types.
+
+rows:
+
+  # ── ROW 1: Title Bar ────────────────────────────────────────────────────────
+  - id: title-bar
+    height: 70
+    widgets:
+      - type: title-banner
+        fields:
+          title: "User Scope Drift Dashboard"
+          subtitle_fields:
+            - workspace_name        # from report header
+            - user_upn              # e.g. "user@contoso.com"
+            - baseline_period       # e.g. "90d baseline → 7d recent"
+            - generation_date       # e.g. "2026-02-10"
+        style:
+          title_size: 26
+          subtitle_size: 13
+          accent_color: palette.primary
+
+  # ── ROW 2: Dual Score Cards + KPI Cards ─────────────────────────────────────
+  # Two score cards (interactive + non-interactive) + 4 KPI cards.
+  - id: score-and-kpis
+    height: 150
+    widgets:
+      - type: score-card
+        title: "Interactive Drift"
+        field: interactive_drift_score      # from Interactive Sign-In Drift section
+        width_pct: 18
+        ranges:
+          - { min: 0,   max: 80,  color: palette.success, label: "Contracting" }
+          - { min: 81,  max: 120, color: palette.primary,  label: "Stable" }
+          - { min: 121, max: 150, color: palette.accent,   label: "Elevated" }
+          - { min: 151, max: 250, color: "#FF8C00",        label: "Significant" }
+          - { min: 251, max: 999, color: palette.danger,    label: "Critical" }
+        show_rating_label: true
+
+      - type: score-card
+        title: "Non-Interactive Drift"
+        field: non_interactive_drift_score  # from Non-Interactive Sign-In Drift section
+        width_pct: 18
+        ranges:
+          - { min: 0,   max: 80,  color: palette.success, label: "Contracting" }
+          - { min: 81,  max: 120, color: palette.primary,  label: "Stable" }
+          - { min: 121, max: 150, color: palette.accent,   label: "Elevated" }
+          - { min: 151, max: 250, color: "#FF8C00",        label: "Significant" }
+          - { min: 251, max: 999, color: palette.danger,    label: "Critical" }
+        show_rating_label: true
+
+      - type: kpi-card
+        label: "Security Alerts"
+        field: total_security_alerts        # total alerts across 97-day window
+        unit: "alerts"
+        icon: "shield"
+        highlight_color: palette.danger
+
+      - type: kpi-card
+        label: "Risk Events"
+        field: identity_protection_count    # Identity Protection risk events
+        unit: "events"
+        icon: "alert-triangle"
+        highlight_color: palette.accent
+
+      - type: kpi-card
+        label: "Anomalies"
+        field: anomaly_count                # from Signinlogs_Anomalies_KQL_CL
+        unit: "detections"
+        icon: "eye"
+        highlight_color: palette.accent
+
+      - type: kpi-card
+        label: "Config Changes"
+        field: config_change_count          # AuditLog operations in recent period
+        unit: "changes"
+        icon: "settings"
+        highlight_color: palette.muted
+
+  # ── ROW 3: Interactive Dimensions + Non-Interactive Dimensions ──────────────
+  # Side-by-side dimension breakdown charts for both sign-in types.
+  - id: dimension-breakdown
+    height: 280
+    widgets:
+      - type: horizontal-bar-chart
+        title: "Interactive Dimensions (7)"
+        field: interactive_dimensions       # array of {dimension, ratio}
+        width_pct: 50
+        bar_height: 26
+        max_items: 7
+        value_suffix: "%"
+        label_field: "dimension"
+        value_field: "ratio"
+        bar_color_map:
+          "Volume (25%)": dimension_colors.volume
+          "Apps (20%)": dimension_colors.apps
+          "Resources (10%)": dimension_colors.resources
+          "IPs (15%)": dimension_colors.ips
+          "Locations (10%)": dimension_colors.locations
+          "Devices (10%)": dimension_colors.devices
+          "FailRate (10%)": dimension_colors.fail_rate
+        reference_line: 100                 # baseline reference
+        threshold_line: 150                 # drift threshold
+
+      - type: horizontal-bar-chart
+        title: "Non-Interactive Dimensions (6)"
+        field: non_interactive_dimensions   # array of {dimension, ratio}
+        width_pct: 50
+        bar_height: 26
+        max_items: 6
+        value_suffix: "%"
+        label_field: "dimension"
+        value_field: "ratio"
+        bar_color_map:
+          "Volume (30%)": dimension_colors.volume
+          "Apps (20%)": dimension_colors.apps
+          "Resources (15%)": dimension_colors.resources
+          "IPs (15%)": dimension_colors.ips
+          "Locations (10%)": dimension_colors.locations
+          "FailRate (10%)": dimension_colors.fail_rate
+        reference_line: 100
+        threshold_line: 150
+
+  # ── ROW 4: Cloud App Drift + Email Drift ───────────────────────────────────
+  - id: cloud-and-email
+    height: 280
+    widgets:
+      - type: table-widget
+        title: "Cloud App Activity Drift"
+        field: cloud_app_drift              # array of {metric, baseline, recent, change}
+        width_pct: 50
+        columns:
+          - { header: "Metric",   field: "metric",   width: 35 }
+          - { header: "Baseline", field: "baseline",  width: 20 }
+          - { header: "Recent",   field: "recent",    width: 20 }
+          - { header: "Change",   field: "change",    width: 25, badge: true }
+        max_items: 6
+        badge_colors:
+          "Contracting": palette.success
+          "Stable": palette.primary
+          "Proportional": palette.primary
+          "Elevated": palette.accent
+          "Reduced": palette.success
+          "None": palette.muted
+
+      - type: table-widget
+        title: "Email Pattern Drift"
+        field: email_drift                  # array of {metric, baseline, recent, change}
+        width_pct: 50
+        columns:
+          - { header: "Metric",   field: "metric",   width: 35 }
+          - { header: "Baseline", field: "baseline",  width: 20 }
+          - { header: "Recent",   field: "recent",    width: 20 }
+          - { header: "Change",   field: "change",    width: 25, badge: true }
+        max_items: 6
+        badge_colors:
+          "Contracting": palette.success
+          "Stable": palette.primary
+          "Proportional": palette.primary
+          "Elevated": palette.accent
+          "Clean": palette.success
+          "None": palette.muted
+
+  # ── ROW 5: Assessment + Recommendations ────────────────────────────────────
+  - id: assessment-and-recs
+    height: 200
+    widgets:
+      - type: assessment-banner
+        title: "Risk Assessment"
+        field: overall_assessment            # e.g. "LOW — Contracting scope, no active threats"
+        width_pct: 40
+        severity_field: "level"
+        detail_field: "detail"
+        severity_colors:
+          critical: palette.danger
+          high: "#FF8C00"
+          medium: palette.accent
+          low: palette.success
+          informational: palette.primary
+
+      - type: recommendation-cards
+        title: "Recommendations"
+        field: recommendations               # array of {priority, text}
+        width_pct: 60
+        max_items: 3
+        priority_colors:
+          high: palette.danger
+          medium: palette.accent
+          low: palette.primary
+          info: palette.muted
+
+# ─── Data Source Mapping ─────────────────────────────────────────────────────
+data_sources:
+  # Row 1 — Title
+  workspace_name: "Report header → Workspace field"
+  user_upn: "Report header → User field (UPN)"
+  baseline_period: "Report header → Baseline Period + Recent Period fields"
+  generation_date: "Report header → Generated field"
+
+  # Row 2 — Dual Scores + KPIs
+  interactive_drift_score: "Interactive Sign-In Drift section → DriftScore value"
+  non_interactive_drift_score: "Non-Interactive Sign-In Drift section → DriftScore value"
+  total_security_alerts: "Correlated Security Alerts section → total alerts count"
+  identity_protection_count: "Identity Protection section → count of risk events"
+  anomaly_count: "Pre-Computed Anomalies section → count of anomaly rows"
+  config_change_count: "Account Configuration Changes section → sum of recent-period operation counts"
+
+  # Row 3 — Dimension breakdowns
+  interactive_dimensions: "Interactive Sign-In Drift table → Dimension name with weight, Ratio column"
+  non_interactive_dimensions: "Non-Interactive Sign-In Drift table → Dimension name with weight, Ratio column"
+
+  # Row 4 — Cloud App + Email drift
+  cloud_app_drift: "Cloud App Activity Drift table → Metric, Baseline, Recent, Change columns"
+  email_drift: "Email Pattern Drift table → Metric, Baseline, Recent, Change columns"
+
+  # Row 5 — Assessment + recommendations
+  overall_assessment: "Verdict section → overall risk level and root cause summary"
+  recommendations: "Recommendations section → action items with priority levels"

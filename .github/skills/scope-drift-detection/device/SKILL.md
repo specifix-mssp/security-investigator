@@ -47,6 +47,7 @@ This skill detects **scope drift** — the gradual, often imperceptible expansio
 7. **[Report Template](#report-template)** - Output format specification
 8. **[Known Pitfalls](#known-pitfalls)** - Edge cases and false positives
 9. **[Error Handling](#error-handling)** - Troubleshooting guide
+10. **[SVG Dashboard Generation](#svg-dashboard-generation)** - Visual dashboard from report
 
 ---
 
@@ -931,3 +932,28 @@ Before presenting results, verify:
 - [ ] For devices with Volume ratio >200% or DriftScore >130%: DeviceInfo uptime (Query 21) was checked to identify intermittent-use devices
 - [ ] Intermittent-use devices were annotated with uptime context and per-session comparison (Query 22)
 - [ ] Volume-driven drift scores on intermittent devices were contextualized as mathematical artifacts (not behavioral expansion)
+
+---
+
+## SVG Dashboard Generation
+
+> 📊 **Optional post-report step.** After a Device scope drift report is generated, the user can request a visual SVG dashboard.
+
+**Trigger phrases:** "generate SVG dashboard", "create a visual dashboard", "visualize this report", "SVG from the report"
+
+### How to Request a Dashboard
+
+- **Same chat:** "Generate an SVG dashboard from the report" — data is already in context.
+- **New chat:** Attach or reference the report file, e.g. `#file:reports/scope-drift/device/Scope_Drift_Report_<entity>_<date>.md`
+- **Customization:** Edit [svg-widgets.yaml](svg-widgets.yaml) before requesting — the renderer reads it at generation time.
+
+### Execution
+
+```
+Step 1:  Read svg-widgets.yaml (this skill's widget manifest)
+Step 2:  Read .github/skills/svg-dashboard/SKILL.md (rendering rules — Manifest Mode)
+Step 3:  Read the completed report file (data source)
+Step 4:  Render SVG → save to reports/scope-drift/device/{report_name}_dashboard.svg
+```
+
+The YAML manifest is the single source of truth for layout, widgets, field mappings, colors, and data source documentation. All customization happens there.

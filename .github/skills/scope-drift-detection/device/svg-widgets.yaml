@@ -1,0 +1,254 @@
+# SVG Dashboard Widget Manifest — Device Scope Drift Report
+#
+# This file defines the layout and data mapping for generating an SVG dashboard
+# from a completed Device Scope Drift Detection report. It is consumed by the
+# shared SVG rendering skill at .github/skills/svg-dashboard/SKILL.md
+#
+# Usage:  After generating a device scope drift report, ask:
+#           "Generate an SVG dashboard from the report"
+#         Copilot will read this manifest + the report data + the skill,
+#         then produce a single SVG file in reports/scope-drift/device/.
+#
+# Customization:  Tweak rows, reorder widgets, add/remove items, change colors.
+#                 The renderer adapts to whatever is defined here.
+
+# ─── Canvas ──────────────────────────────────────────────────────────────────
+canvas:
+  width: 1400
+  height: 1100          # 5 rows, 12 widgets — within output token limits
+  background: "#0d1117"
+  padding: 30
+  row_gap: 20
+  col_gap: 20
+  font_family: "Segoe UI, Roboto, sans-serif"
+
+# ─── Color Palette ───────────────────────────────────────────────────────────
+palette:
+  primary: "#409AE1"      # blue   — KPI highlights, primary data
+  secondary: "#b4a0ff"    # purple — secondary charts
+  accent: "#FFC83D"       # yellow — warnings, near-threshold
+  danger: "#EF6950"       # red    — critical findings, flagged entities
+  success: "#40C5AF"      # green  — stable, healthy metrics
+  muted: "#b2b2b2"        # gray   — labels, axis text
+  card_bg: "#161b22"      # dark card background
+  card_border: "#30363d"  # subtle border
+  text_primary: "#e6edf3"
+  text_secondary: "#b2b2b2"
+
+# ─── Drift Status Colors (consistent across all widgets) ────────────────────
+drift_status_colors:
+  critical: "#EF6950"       # red    — Critical / extreme drift (> 250%)
+  above_threshold: "#FF8C00" # orange — Above 150% threshold
+  near_threshold: "#FFC83D"  # yellow — 120–150%
+  stable: "#409AE1"          # blue   — 80–120%
+  contracting: "#40C5AF"     # green  — < 80%
+  silent: "#6e7681"          # dim gray — silent / offline devices
+
+# ─── Dimension Colors (Device 5-dimension formula) ──────────────────────────
+dimension_colors:
+  volume: "#409AE1"       # blue
+  processes: "#b4a0ff"    # purple
+  accounts: "#FFC83D"     # yellow
+  chains: "#40C5AF"       # green
+  companies: "#EF6950"    # red
+
+# ─── Row Definitions ─────────────────────────────────────────────────────────
+# TOKEN-BUDGET LAYOUT: 5 rows, 12 widgets, ~1100px height
+# Matches SPN/MCP Usage dashboard density profile (proven to fit output limits).
+
+rows:
+
+  # ── ROW 1: Title Bar ────────────────────────────────────────────────────────
+  - id: title-bar
+    height: 70
+    widgets:
+      - type: title-banner
+        fields:
+          title: "Device Scope Drift Dashboard"
+          subtitle_fields:
+            - workspace_name        # from report header
+            - baseline_period       # e.g. "90d baseline → 7d recent"
+            - generation_date       # e.g. "2026-02-10"
+        style:
+          title_size: 26
+          subtitle_size: 13
+          accent_color: palette.primary
+
+  # ── ROW 2: Peak Drift Score + KPI Cards ─────────────────────────────────────
+  # Score card (25%) + 5 KPI cards fill the row.
+  - id: score-and-kpis
+    height: 150
+    widgets:
+      - type: score-card
+        title: "Peak Drift Score"
+        field: max_drift_score              # highest adjusted DriftScore from ranking table
+        width_pct: 25
+        ranges:
+          - { min: 0,   max: 120, color: palette.success, label: "Stable" }
+          - { min: 121, max: 150, color: palette.accent,   label: "Elevated" }
+          - { min: 151, max: 250, color: "#FF8C00",        label: "Significant" }
+          - { min: 251, max: 999, color: palette.danger,    label: "Critical" }
+        show_rating_label: true
+
+      - type: kpi-card
+        label: "Devices Analyzed"
+        field: total_devices                # from Executive Summary
+        unit: "devices"
+        icon: "monitor"
+
+      - type: kpi-card
+        label: "Flagged (>150%)"
+        field: flagged_device_count         # devices with adjusted score > 150%
+        unit: "devices"
+        icon: "alert-triangle"
+        highlight_color: palette.danger
+
+      - type: kpi-card
+        label: "Security Alerts"
+        field: total_security_alerts        # total correlated incidents
+        unit: "incidents"
+        icon: "shield"
+        highlight_color: palette.danger
+
+      - type: kpi-card
+        label: "Uptime-Adjusted"
+        field: uptime_adjusted_count        # devices with raw→adjusted score correction
+        unit: "devices"
+        icon: "clock"
+        highlight_color: palette.accent
+
+      - type: kpi-card
+        label: "Silent Devices"
+        field: silent_device_count          # devices with no recent activity
+        unit: "devices"
+        icon: "power"
+        highlight_color: palette.muted
+
+  # ── ROW 3: Drift Score Ranking + Dimension Breakdown ───────────────────────
+  - id: ranking-and-dimensions
+    height: 280
+    widgets:
+      - type: table-widget
+        title: "Drift Score Ranking"
+        field: drift_score_ranking          # array of {rank, device, adj_score, status}
+        width_pct: 60
+        columns:
+          - { header: "#",       field: "rank",      width: 8 }
+          - { header: "Device",  field: "device",    width: 40 }
+          - { header: "Adj DS",  field: "adj_score", width: 20 }
+          - { header: "Status",  field: "status",    width: 32, badge: true }
+        max_items: 6
+        sort_by: "adj_score desc"
+        badge_colors:
+          "CRITICAL": drift_status_colors.critical
+          "ABOVE THRESHOLD": drift_status_colors.above_threshold
+          "NEAR THRESHOLD": drift_status_colors.near_threshold
+          "STABLE": drift_status_colors.stable
+          "CONTRACTING": drift_status_colors.contracting
+          "SILENT": drift_status_colors.silent
+
+      - type: horizontal-bar-chart
+        title: "Dimension Breakdown (Top Devices)"
+        field: dimension_breakdown           # array of {device, volume, processes, accounts, chains, companies}
+        width_pct: 40
+        bar_height: 24
+        max_items: 5
+        value_suffix: "%"
+        series:
+          - { field: "volume",    label: "Volume",    color: dimension_colors.volume }
+          - { field: "processes", label: "Processes",  color: dimension_colors.processes }
+          - { field: "accounts",  label: "Accounts",   color: dimension_colors.accounts }
+          - { field: "chains",    label: "Chains",     color: dimension_colors.chains }
+          - { field: "companies", label: "Companies",  color: dimension_colors.companies }
+
+  # ── ROW 4: First-Seen Processes + Correlated Alerts ────────────────────────
+  - id: processes-and-alerts
+    height: 280
+    widgets:
+      - type: horizontal-bar-chart
+        title: "First-Seen Processes by Device"
+        field: first_seen_processes          # array of {device, count}
+        width_pct: 45
+        bar_height: 28
+        max_items: 6
+        value_suffix: ""
+        color: palette.secondary
+        label_field: "device"
+        value_field: "count"
+
+      - type: table-widget
+        title: "Correlated Incidents"
+        field: correlated_incidents          # array of {incident, severity, classification, devices}
+        width_pct: 55
+        columns:
+          - { header: "Incident",       field: "incident",       width: 25 }
+          - { header: "Severity",       field: "severity",       width: 20, badge: true }
+          - { header: "Classification", field: "classification", width: 30, badge: true }
+          - { header: "Devices",        field: "devices",        width: 25 }
+        max_items: 6
+        sort_by: "incident desc"
+        badge_colors:
+          "High": palette.danger
+          "Medium": palette.accent
+          "Low": palette.primary
+          "TruePositive": palette.danger
+          "FalsePositive": palette.success
+          "BenignPositive": palette.accent
+          "Undetermined": palette.muted
+
+  # ── ROW 5: Assessment + Recommendations ────────────────────────────────────
+  - id: assessment-and-recs
+    height: 200
+    widgets:
+      - type: assessment-banner
+        title: "Fleet Risk Assessment"
+        field: overall_assessment            # e.g. "LOW — All drift is uptime-driven"
+        width_pct: 40
+        severity_field: "level"              # "critical" | "high" | "medium" | "low" | "informational"
+        detail_field: "detail"               # 1-2 sentence supporting text
+        severity_colors:
+          critical: palette.danger
+          high: "#FF8C00"
+          medium: palette.accent
+          low: palette.success
+          informational: palette.primary
+
+      - type: recommendation-cards
+        title: "Recommendations"
+        field: recommendations               # array of {priority, text}
+        width_pct: 60
+        max_items: 3
+        priority_colors:
+          high: palette.danger
+          medium: palette.accent
+          low: palette.primary
+          info: palette.muted
+
+# ─── Data Source Mapping ─────────────────────────────────────────────────────
+# Maps each widget field to the report section where the data lives.
+# The SVG renderer extracts these values from the completed report markdown.
+data_sources:
+  # Row 1 — Title
+  workspace_name: "Report header → Workspace field"
+  baseline_period: "Report header → Baseline Period + Recent Period fields"
+  generation_date: "Report header → Generated field"
+
+  # Row 2 — Score + KPIs
+  max_drift_score: "Per-Device Drift Score Ranking → highest Adj. Score (or raw if no adjustment)"
+  total_devices: "Report header → Devices Analyzed field"
+  flagged_device_count: "Per-Device Drift Score Ranking → count of devices with effective score > 150%"
+  total_security_alerts: "Correlated Security Alerts → total unique incidents"
+  uptime_adjusted_count: "Per-Device Drift Score Ranking → count of devices with 'Uptime-adjusted' note"
+  silent_device_count: "Per-Device Drift Score Ranking → count of devices with SILENT status"
+
+  # Row 3 — Ranking table + dimension chart
+  drift_score_ranking: "Per-Device Drift Score Ranking table → columns: Rank, Device, DriftScore (adjusted if available), Status"
+  dimension_breakdown: "Per-Device Drift Score Ranking table → per-device Volume%, Process%, Account%, Chain%, Company% columns"
+
+  # Row 4 — First-seen processes + alerts
+  first_seen_processes: "First-Seen Processes section → count of new processes per device"
+  correlated_incidents: "Correlated Security Alerts section → incident table with severity, classification, devices"
+
+  # Row 5 — Assessment + recommendations
+  overall_assessment: "Verdict section → overall fleet risk level and root cause summary"
+  recommendations: "Recommendations section → action items with priority levels"

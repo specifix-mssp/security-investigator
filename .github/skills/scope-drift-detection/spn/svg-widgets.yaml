@@ -1,0 +1,230 @@
+# SVG Dashboard Widget Manifest — SPN Scope Drift Report
+#
+# This file defines the layout and data mapping for generating an SVG dashboard
+# from a completed SPN Scope Drift Detection report. It is consumed by the shared
+# SVG rendering skill at .github/skills/svg-dashboard/SKILL.md
+#
+# Usage:  After generating an SPN scope drift report, ask:
+#           "Generate an SVG dashboard from the report"
+#         Copilot will read this manifest + the report data + the skill,
+#         then produce a single SVG file in reports/scope-drift/spn/.
+#
+# Customization:  Tweak rows, reorder widgets, add/remove items, change colors.
+#                 The renderer adapts to whatever is defined here.
+
+# ─── Canvas ──────────────────────────────────────────────────────────────────
+canvas:
+  width: 1400
+  height: 1100          # 5 rows, 10 widgets — within output token limits
+  background: "#0d1117"
+  padding: 30
+  row_gap: 20
+  col_gap: 20
+  font_family: "Segoe UI, Roboto, sans-serif"
+
+# ─── Color Palette ───────────────────────────────────────────────────────────
+# Aligned with SharePoint Dark Theme:
+# https://learn.microsoft.com/en-us/sharepoint/dev/design/themes-colors
+palette:
+  primary: "#409AE1"      # blue   — KPI highlights, primary data
+  secondary: "#b4a0ff"    # purple — secondary charts
+  accent: "#FFC83D"       # yellow — warnings, near-threshold
+  danger: "#EF6950"       # red    — critical findings, flagged entities
+  success: "#40C5AF"      # green  — stable, healthy metrics
+  muted: "#b2b2b2"        # gray   — labels, axis text
+  card_bg: "#161b22"      # dark card background
+  card_border: "#30363d"  # subtle border
+  text_primary: "#e6edf3"
+  text_secondary: "#b2b2b2"
+
+# ─── Drift Status Colors (consistent across all widgets) ────────────────────
+drift_status_colors:
+  critical: "#EF6950"       # red    — Critical / extreme drift (> 250%)
+  above_threshold: "#FF8C00" # orange — Above 150% threshold
+  near_threshold: "#FFC83D"  # yellow — 120–150%
+  stable: "#409AE1"          # blue   — 80–120%
+  contracting: "#40C5AF"     # green  — < 80%
+
+# ─── Dimension Colors (Pareto + dimension breakdown) ────────────────────────
+dimension_colors:
+  volume: "#409AE1"       # blue
+  resources: "#b4a0ff"    # purple
+  ips: "#FFC83D"          # yellow
+  locations: "#40C5AF"    # green
+  fail_rate: "#EF6950"    # red
+
+# ─── Row Definitions ─────────────────────────────────────────────────────────
+# TOKEN-BUDGET LAYOUT: 5 rows, 12 widgets, ~1100px height
+# Matches MCP Usage dashboard density profile (proven to fit output limits).
+# Dropped: stacked-bar-chart (expensive: bars × segments), donut chart (info
+#          folded into ranking table status badges).
+# Reduced: table columns 6→4, max_items 8→6, multi-series bar items 8→6.
+
+rows:
+
+  # ── ROW 1: Title Bar ────────────────────────────────────────────────────────
+  - id: title-bar
+    height: 70
+    widgets:
+      - type: title-banner
+        fields:
+          title: "SPN Scope Drift Dashboard"
+          subtitle_fields:
+            - workspace_name        # from report header
+            - baseline_period       # e.g. "90d baseline → 7d recent"
+            - generation_date       # e.g. "2026-03-16"
+        style:
+          title_size: 26
+          subtitle_size: 13
+          accent_color: palette.primary
+
+  # ── ROW 2: Peak Drift Score + KPI Cards ─────────────────────────────────────
+  # Score card (25%) + 5 KPI cards fill the row.
+  - id: score-and-kpis
+    height: 150
+    widgets:
+      - type: score-card
+        title: "Peak Drift Score"
+        field: max_drift_score              # highest adjusted DriftScore from ranking table
+        width_pct: 25
+        ranges:
+          - { min: 0,   max: 120, color: palette.success, label: "Stable" }
+          - { min: 121, max: 150, color: palette.accent,   label: "Elevated" }
+          - { min: 151, max: 250, color: "#FF8C00",        label: "Significant" }
+          - { min: 251, max: 999, color: palette.danger,    label: "Critical" }
+        show_rating_label: true
+
+      - type: kpi-card
+        label: "SPNs Analyzed"
+        field: total_spns                   # from Executive Summary
+        unit: "SPNs"
+        icon: "key"
+
+      - type: kpi-card
+        label: "Flagged (>150%)"
+        field: flagged_spn_count            # from Executive Summary
+        unit: "SPNs"
+        icon: "alert-triangle"
+        highlight_color: palette.danger
+
+      - type: kpi-card
+        label: "Security Alerts"
+        field: total_security_alerts        # sum of alerts across flagged SPNs
+        unit: "alerts"
+        icon: "shield"
+        highlight_color: palette.danger
+
+      - type: kpi-card
+        label: "Near Threshold"
+        field: near_threshold_count         # SPNs at 120-150%
+        unit: "SPNs"
+        icon: "eye"
+        highlight_color: palette.accent
+
+      - type: kpi-card
+        label: "Low-Vol Adjusted"
+        field: low_volume_adjusted_count    # SPNs with denominator floor applied
+        unit: "SPNs"
+        icon: "info"
+        highlight_color: palette.muted
+
+  # ── ROW 3: Drift Score Ranking + Pareto Dimensions ────────────────────────
+  # MERGED: Dropped donut (status visible via ranking badges).
+  # Moved Pareto bar chart here from old Row 4. Dropped stacked-bar-chart
+  # (most expensive widget type: bars × segments × labels).
+  - id: ranking-and-pareto
+    height: 280
+    widgets:
+      - type: table-widget
+        title: "Drift Score Ranking"
+        field: drift_score_ranking          # array of {rank, name, adj_score, status}
+        width_pct: 60
+        columns:
+          - { header: "#",        field: "rank",      width: 8 }
+          - { header: "Service Principal", field: "name", width: 40 }
+          - { header: "Adj DS",   field: "adj_score", width: 20 }
+          - { header: "Status",   field: "status",    width: 32, badge: true }
+        max_items: 6
+        sort_by: "adj_score desc"
+        badge_colors:
+          "CRITICAL": drift_status_colors.critical
+          "SIGNIFICANT": drift_status_colors.above_threshold
+          "NEAR THRESH": drift_status_colors.near_threshold
+          "Stable": drift_status_colors.stable
+          "Contracting": drift_status_colors.contracting
+
+      - type: horizontal-bar-chart
+        title: "Drift by Dimension"
+        field: pareto_dimensions            # from Pareto Analysis — array of {name, contribution_pct}
+        width_pct: 40
+        max_items: 5
+        bar_color_by: dimension
+        show_value_label: true
+        value_unit: "%"
+
+  # ── ROW 4: Baseline vs Recent Volume + Correlated Signals ──────────────────
+  - id: volume-and-signals
+    height: 260
+    widgets:
+      - type: horizontal-bar-chart
+        title: "Daily Avg Sign-ins: BL vs Recent"
+        field: baseline_vs_recent_volume    # array of {name, baseline_avg, recent_avg}
+        width_pct: 50
+        max_items: 6
+        multi_series: true
+        series:
+          - { field: "baseline_avg", label: "Baseline (90d)", color: palette.muted }
+          - { field: "recent_avg",   label: "Recent (7d)",    color: palette.primary }
+        show_value_label: true
+
+      - type: table-widget
+        title: "Correlated Signals"
+        field: correlated_signals           # array of {source, spn, finding}
+        width_pct: 50
+        columns:
+          - { header: "Source",   field: "source",  width: 25 }
+          - { header: "SPN",     field: "spn",     width: 25 }
+          - { header: "Finding", field: "finding",  width: 50 }
+        max_items: 6
+
+  # ── ROW 5: Assessment Banner + Recommendations ────────────────────────────
+  - id: assessment-and-recs
+    height: 200
+    widgets:
+      - type: assessment-banner
+        title: "Overall Assessment"
+        field: overall_assessment           # from Verdict narrative
+        width_pct: 50
+        style:
+          border_color: palette.danger
+          icon: "shield-alert"
+        sub_fields:
+          - key_risks                       # 🔴/🟠 findings
+          - strengths                       # 🟢/✅ findings
+
+      - type: recommendation-cards
+        title: "Recommendations"
+        field: recommendations              # array of {priority, title, description}
+        width_pct: 50
+        card_colors:
+          critical: palette.danger
+          high: "#FF8C00"
+          medium: palette.accent
+        max_cards: 3
+
+# ─── Data Source Mapping ─────────────────────────────────────────────────────
+# Maps YAML field names above to report sections.
+# The renderer extracts values from the markdown report.
+data_sources:
+  report_file: "reports/scope-drift/spn/Scope_Drift_Report_*.md"
+  field_mapping_notes: |
+    Header       → workspace_name, baseline_period, generation_date
+    Exec Summary → total_spns, flagged_spn_count, near_threshold_count, low_volume_adjusted_count
+    Drift Score Ranking → drift_score_ranking (array of {rank, name, adj_score, status} — top 6)
+    Flagged Entities → max_drift_score (highest adj_score from ranking)
+    Pareto Analysis  → pareto_dimensions (array of {name, contribution_pct} — 5 dimensions)
+    Behavioral Baseline Chart → baseline_vs_recent_volume ({name, baseline_avg, recent_avg} — top 6)
+    Correlated Signals → correlated_signals ({source, spn, finding} — top 6 rows)
+    Security Assessment → overall_assessment narrative, key_risks (🔴/🟠), strengths (🟢/✅)
+    Verdict → recommendations (array of {priority, title, description} — top 3 ⚠️ items)
+    Computed → total_security_alerts (sum of SecurityAlert counts across flagged SPNs)

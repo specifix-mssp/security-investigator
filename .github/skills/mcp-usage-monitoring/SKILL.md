@@ -1998,70 +1998,19 @@ If any prerequisite is not met, the skill will report the gap and skip the affec
 
 **Trigger phrases:** "generate SVG dashboard", "create a visual dashboard", "visualize this report", "SVG from the report"
 
-### User Guide — How to Request a Dashboard
+### How to Request a Dashboard
 
-**Scenario A — Same chat session (report was just generated):**
-
-Simply ask:
-```
-Generate an SVG dashboard from the report
-```
-Copilot already has the report data in context and will produce the SVG immediately.
-
-**Scenario B — New chat (report already exists as a file):**
-
-Attach or reference the report file:
-```
-Generate an SVG dashboard from the MCP usage report
-#file:reports/mcp-usage/MCP_Usage_Report_<workspace>_<date>.md
-```
-Or drag the report file into chat. Copilot will read the file and generate the dashboard.
-
-**Scenario C — Customization:**
-
-Edit [svg-widgets.yaml](svg-widgets.yaml) before requesting the dashboard. Then ask as above — the renderer reads the YAML at generation time, so changes take effect immediately.
-
-### How It Works (Internal)
-
-1. **Widget manifest:** [svg-widgets.yaml](svg-widgets.yaml) defines the dashboard layout — rows, widgets, data field mappings, color palette, and per-server colors.
-2. **Shared renderer:** [.github/skills/svg-dashboard/SKILL.md](../svg-dashboard/SKILL.md) contains the rendering rules for all widget types (Manifest Mode).
-3. **Data source:** The completed report markdown provides the actual values.
+- **Same chat:** "Generate an SVG dashboard from the report" — data is already in context.
+- **New chat:** Attach or reference the report file, e.g. `#file:reports/mcp-usage/MCP_Usage_Report_<workspace>_<date>.md`
+- **Customization:** Edit [svg-widgets.yaml](svg-widgets.yaml) before requesting — the renderer reads it at generation time.
 
 ### Execution
-
-When the user asks for an SVG dashboard after a report run:
 
 ```
 Step 1:  Read svg-widgets.yaml (this skill's widget manifest)
 Step 2:  Read .github/skills/svg-dashboard/SKILL.md (rendering rules — Manifest Mode)
 Step 3:  Read the completed report file (data source)
-         — If same chat: report data is already in context
-         — If new chat: read the file path provided by user or find latest in reports/mcp-usage/
 Step 4:  Render SVG → save to reports/mcp-usage/{report_name}_dashboard.svg
 ```
 
-### Dashboard Layout (8 Rows)
-
-| Row | Content |
-|-----|----------|
-| **1. Title Bar** | Report title, workspace, date range |
-| **2. Score + KPIs** | MCP Usage Score gauge (0–100 with Healthy/Elevated/Concerning/Critical zones), Total API Calls, Auth Events, Distinct Users, Active Servers, MCP Query Share %, Sensitive API Rate |
-| **3. Score Breakdown + Landscape** | Score dimension bars (5 dimensions × score/20), Cross-server summary table (calls, auth, users, error rate, status per server) |
-| **4. Server Deep Dives** | Graph MCP top endpoints (with sensitive flags), Data Lake MCP tool breakdown (with error overlay), MCP vs Direct KQL donut |
-| **5. Trends + Governance** | Multi-series daily activity trend (one line per server, dormancy shading), Workspace query sources (all sources with MCP highlighted) |
-| **6. Users + Auth** | Top MCP users table, Auth by client app bars, Error hotspots table |
-| **7. Recommendations** | Priority recommendation cards (High/Medium/Low) |
-| **8. Assessment** | Security assessment banner (critical findings, warnings, positives), Key findings table |
-
-### Customization
-
-The YAML manifest controls everything:
-
-| What to Change | Where in YAML | Example |
-|----------------|---------------|---------|
-| Add/remove a KPI card | `rows[1].widgets` | Remove "Sensitive API Rate" card |
-| Change server colors | `server_colors` section | Make Triage MCP blue instead of green |
-| Reorder rows | Move row blocks up/down | Put assessment before recommendations |
-| Change color scheme | `palette` section | Swap to a different theme |
-| Show more/fewer users | Widget's `max_items` | Change top users from 10 → 5 |
-| Add a new widget row | Append a new `- id:` block | Add an "Agent Identity" panel |
+The YAML manifest is the single source of truth for layout, widgets, field mappings, colors, and data source documentation. All customization happens there.
