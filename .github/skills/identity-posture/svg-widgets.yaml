@@ -1,0 +1,269 @@
+# SVG Dashboard Widget Manifest — Identity Security Posture Report
+#
+# This file defines the layout and data mapping for generating an SVG dashboard
+# from a completed Identity Security Posture report. It is consumed by the shared
+# SVG rendering skill at .github/skills/svg-dashboard/SKILL.md
+#
+# Usage:  After generating an identity posture report, ask:
+#           "Generate an SVG dashboard from the report"
+#         Copilot will read this manifest + the report data + the skill,
+#         then produce a single SVG file in reports/identity-posture/.
+#
+# Customization:  Tweak rows, reorder widgets, add/remove items, change colors.
+#                 The renderer adapts to whatever is defined here.
+
+# ─── Canvas ──────────────────────────────────────────────────────────────────
+canvas:
+  width: 1400
+  height: 1100          # 5 rows, 12 widgets — within output token limits
+  background: "#0d1117"
+  padding: 30
+  row_gap: 20
+  col_gap: 20
+  font_family: "Segoe UI, Roboto, sans-serif"
+
+# ─── Color Palette ───────────────────────────────────────────────────────────
+palette:
+  primary: "#409AE1"      # blue   — KPI highlights, primary data
+  secondary: "#b4a0ff"    # purple — secondary charts
+  accent: "#FFC83D"       # yellow — warnings, near-threshold
+  danger: "#EF6950"       # red    — critical findings, flagged entities
+  success: "#40C5AF"      # green  — stable, healthy metrics
+  muted: "#b2b2b2"        # gray   — labels, axis text
+  card_bg: "#161b22"      # dark card background
+  card_border: "#30363d"  # subtle border
+  text_primary: "#e6edf3"
+  text_secondary: "#b2b2b2"
+
+# ─── Score Rating Colors ────────────────────────────────────────────────────
+score_rating_colors:
+  healthy: "#40C5AF"        # green  — 0–25 (low risk)
+  elevated: "#FFC83D"       # yellow — 26–50 (elevated)
+  concerning: "#FF8C00"     # orange — 51–75 (concerning)
+  critical: "#EF6950"       # red    — 76–100 (critical)
+
+# ─── Dimension Colors (Identity Posture Score — 5 dimensions) ───────────────
+dimension_colors:
+  stale_deleted: "#EF6950"    # red    — stale/deleted account risk
+  privileged: "#FF8C00"      # orange — privileged account exposure
+  password: "#FFC83D"        # yellow — password posture
+  risk_distrib: "#b4a0ff"   # purple — risk distribution
+  identity_sprawl: "#40C5AF" # green  — identity sprawl
+
+# ─── Provider Colors ────────────────────────────────────────────────────────
+provider_colors:
+  AzureActiveDirectory: "#409AE1"   # blue
+  SailPoint: "#b4a0ff"              # purple
+  Okta: "#FFC83D"                   # yellow
+  ActiveDirectory: "#40C5AF"        # green
+  CyberArkIdentity: "#EF6950"      # red
+  Ping: "#b2b2b2"                   # gray
+
+# ─── Row Definitions ─────────────────────────────────────────────────────────
+# TOKEN-BUDGET LAYOUT: 5 rows, 12 widgets, ~1100px height
+# Designed for identity posture reports with score card, dimension breakdown,
+# provider inventory, risk distribution, and recommendations.
+
+rows:
+
+  # ── ROW 1: Title Bar ────────────────────────────────────────────────────────
+  - id: title-bar
+    height: 70
+    widgets:
+      - type: title-banner
+        fields:
+          title: "Identity Security Posture Dashboard"
+          subtitle_fields:
+            - data_source           # e.g. "IdentityAccountInfo (Advanced Hunting — Preview)"
+            - analysis_period       # e.g. "2026-02-22 → 2026-03-24 (30 days)"
+            - generation_date       # e.g. "2026-03-24"
+        style:
+          title_size: 26
+          subtitle_size: 13
+          accent_color: palette.primary
+
+  # ── ROW 2: Identity Posture Score + KPI Cards ──────────────────────────────
+  - id: score-and-kpis
+    height: 150
+    widgets:
+      - type: score-card
+        title: "Identity Posture Score"
+        field: identity_posture_score       # e.g. 63 (0–100, lower is better)
+        width_pct: 25
+        ranges:
+          - { min: 0,  max: 25, color: score_rating_colors.healthy,    label: "Healthy" }
+          - { min: 26, max: 50, color: score_rating_colors.elevated,   label: "Elevated" }
+          - { min: 51, max: 75, color: score_rating_colors.concerning,  label: "Concerning" }
+          - { min: 76, max: 100, color: score_rating_colors.critical,   label: "Critical" }
+        show_rating_label: true
+
+      - type: kpi-card
+        label: "Total Accounts"
+        field: total_accounts               # from Key Metrics
+        unit: ""
+        highlight_color: palette.primary
+
+      - type: kpi-card
+        label: "Identities"
+        field: unique_identities            # from Key Metrics
+        unit: ""
+        highlight_color: palette.secondary
+
+      - type: kpi-card
+        label: "Providers"
+        field: identity_providers_count     # from Key Metrics
+        unit: ""
+        highlight_color: palette.accent
+
+      - type: kpi-card
+        label: "High-Risk Enabled"
+        field: high_risk_enabled            # from Risk Distribution → High risk, Enabled
+        unit: ""
+        highlight_color: palette.danger
+
+      - type: kpi-card
+        label: "Deleted w/ Roles"
+        field: deleted_with_roles           # from Deleted Account Hygiene
+        unit: ""
+        highlight_color: palette.danger
+
+  # ── ROW 3: Score Dimensions + Risk Distribution ────────────────────────────
+  - id: dimensions-and-risk
+    height: 280
+    widgets:
+      - type: horizontal-bar-chart
+        title: "Posture Score Dimensions"
+        field: score_dimensions             # array of {dimension, score, max}
+        width_pct: 45
+        bar_height: 32
+        max_items: 5
+        value_suffix: "/20"
+        label_field: "dimension"
+        value_field: "score"
+        max_value: 20
+        bar_color_map:
+          "Stale/Deleted": dimension_colors.stale_deleted
+          "Privileged": dimension_colors.privileged
+          "Password": dimension_colors.password
+          "Risk Distrib.": dimension_colors.risk_distrib
+          "Identity Sprawl": dimension_colors.identity_sprawl
+
+      - type: stacked-bar-chart
+        title: "Risk Level Distribution"
+        field: risk_distribution            # array of {provider, high, medium, low, none}
+        width_pct: 55
+        orientation: horizontal
+        show_totals: true
+        max_items: 3                        # Top providers with risk data (AAD, AD)
+        label_field: "provider"
+        segment_colors:
+          High: palette.danger
+          Medium: "#FF8C00"
+          Low: palette.accent
+          None: palette.muted
+
+  # ── ROW 4: Provider Account Breakdown + Key Hygiene Metrics ────────────────
+  - id: providers-and-hygiene
+    height: 280
+    widgets:
+      - type: horizontal-bar-chart
+        title: "Accounts by Provider"
+        field: provider_accounts            # array of {provider, count}
+        width_pct: 45
+        bar_height: 28
+        max_items: 6
+        value_suffix: ""
+        label_field: "provider"
+        value_field: "count"
+        bar_color_map:
+          "AzureActiveDirectory": provider_colors.AzureActiveDirectory
+          "SailPoint": provider_colors.SailPoint
+          "Okta": provider_colors.Okta
+          "ActiveDirectory": provider_colors.ActiveDirectory
+          "CyberArkIdentity": provider_colors.CyberArkIdentity
+          "Ping": provider_colors.Ping
+
+      - type: table-widget
+        title: "Identity Hygiene Summary"
+        field: hygiene_metrics              # array of {metric, value, status}
+        width_pct: 55
+        columns:
+          - { header: "Metric",  field: "metric", width: 50 }
+          - { header: "Value",   field: "value",  width: 25 }
+          - { header: "Status",  field: "status", width: 25, badge: true }
+        max_items: 10
+        badge_colors:
+          "Critical": palette.danger
+          "Warning": "#FF8C00"
+          "Review": palette.accent
+          "Healthy": palette.success
+          "Info": palette.primary
+
+  # ── ROW 5: Assessment + Recommendations ────────────────────────────────────
+  - id: assessment-and-recs
+    height: 200
+    widgets:
+      - type: assessment-banner
+        title: "Security Assessment"
+        field: overall_assessment            # e.g. "CONCERNING — 560 High-risk Enabled accounts with active roles"
+        width_pct: 40
+        severity_field: "level"              # "critical" | "high" | "medium" | "low" | "informational"
+        detail_field: "detail"               # 1-2 sentence supporting text
+        severity_colors:
+          critical: palette.danger
+          high: "#FF8C00"
+          medium: palette.accent
+          low: palette.success
+          informational: palette.primary
+
+      - type: recommendation-cards
+        title: "Top Recommendations"
+        field: recommendations               # array of {priority, text}
+        width_pct: 60
+        max_items: 3
+        priority_colors:
+          high: palette.danger
+          medium: palette.accent
+          low: palette.primary
+          info: palette.muted
+
+# ─── Data Source Mapping ─────────────────────────────────────────────────────
+# Maps each widget field to the report section where the data lives.
+# The SVG renderer extracts these values from the completed report markdown.
+data_sources:
+  report_file: "reports/identity-posture/Identity_Posture_Report_*.md"
+  field_mapping_notes: |
+    # Row 1 — Title
+    data_source: "Report header → Data Source field (e.g. IdentityAccountInfo (Advanced Hunting — Preview))"
+    analysis_period: "Report header → Analysis Period field"
+    generation_date: "Report header → Generated field"
+
+    # Row 2 — Score + KPIs
+    identity_posture_score: "Identity Posture Score Card → score value (0–100, lower = better)"
+    total_accounts: "Key Metrics → Total Accounts (deduplicated)"
+    unique_identities: "Key Metrics → Unique Identities"
+    identity_providers_count: "Key Metrics → Identity Providers (count only, e.g. 6)"
+    high_risk_enabled: "Risk Distribution → High risk, Enabled total across all providers"
+    deleted_with_roles: "Stale & Deleted Account Hygiene → Deleted with Roles"
+
+    # Row 3 — Dimensions + Risk
+    score_dimensions: "Identity Posture Score Card → Score Breakdown table (5 rows: dimension, score/20). Use short labels: Stale/Deleted, Privileged, Password, Risk Distrib., Identity Sprawl"
+    risk_distribution: "Risk Distribution table → aggregate by provider: {provider, high, medium, low, none}. Include only providers with risk data (typically AAD and AD)"
+
+    # Row 4 — Providers + Hygiene
+    provider_accounts: "Identity Inventory → Accounts by Provider table → {provider, count (Accounts column)}"
+    hygiene_metrics: "Aggregated from multiple sections — build array of {metric, value, status}:
+      - Stale Accounts (Enabled, 30d*): from Stale Account Detection → total stale | status=Warning
+      - Stale with Active Roles: from Stale account metrics | status=Warning
+      - Deleted with Roles: from Deleted Account Hygiene | status=Critical
+      - PwdNeverExpires: from Password Posture → AD Password Policy Flags → PasswordNeverExpires count | status=Critical (if >0) or Healthy (if 0). Now accurate (not directional) thanks to isnotnull(UAC) guard
+      - krbtgt Oldest Password: from Built-In Account Password Audit → oldest krbtgt DaysSinceLastPasswordChange. Value as 'Xd'. status=Critical (if >180d per MS guidance) or Healthy (if ≤180d)
+      - Multi-Provider Identities: from Multi-Provider Identity Linking | status=Info
+      - Status Mismatches: from Multi-Provider Identity Linking → mismatches | status=Review (if >0) or Healthy (if 0)
+      - High-Priv Accounts: from Key Metrics → Accounts with High-Privilege Roles | status=Review
+      - Service Accounts: from Service Account Inventory → total | status=Healthy
+      - Sensitive-Tagged: from Sensitive & Honeytoken → total | status=Info"
+
+    # Row 5 — Assessment + Recommendations
+    overall_assessment: "Security Assessment table → first 🔴 finding as headline. Level from overall score rating (healthy/elevated/concerning/critical). Detail = 1-2 sentence summary of top risks"
+    recommendations: "Recommendations section → top 3 items with priority from emoji (🔴=high, 🟠=medium, 🟡=low)"
