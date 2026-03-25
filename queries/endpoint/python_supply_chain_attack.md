@@ -2,9 +2,9 @@
 
 **Created:** 2026-03-25  
 **Platform:** Both  
-**Tables:** DeviceProcessEvents, DeviceFileEvents, DeviceNetworkEvents, ASimDnsActivityLogs, DeviceEvents, DeviceRegistryEvents  
-**Keywords:** litellm, pypi, pip install, supply chain, credential stealer, python package, site-packages, .pth file, secret exfiltration, environment variable harvesting, cloud credential theft, models.litellm.cloud, trivy, CI/CD compromise  
-**MITRE:** T1195.002, T1059.006, T1027, T1555, T1552.001, T1041, T1071.001, T1547.004, T1082, T1083, T1005  
+**Tables:** DeviceProcessEvents, DeviceFileEvents, DeviceNetworkEvents, ASimDnsActivityLogs, DeviceEvents, DeviceRegistryEvents, CloudAppEvents  
+**Keywords:** litellm, pypi, pip install, supply chain, credential stealer, python package, site-packages, .pth file, secret exfiltration, environment variable harvesting, cloud credential theft, models.litellm.cloud, checkmarx.zone, trivy, CI/CD compromise, sysmon.py, node-setup, kubernetes lateral movement, fork bomb, uvx, MCP server, transitive dependency  
+**MITRE:** T1195.002, T1059.006, T1027, T1555, T1552.001, T1041, T1071.001, T1547.004, T1082, T1083, T1005, T1543.002, T1610, T1552.007, T1499.004  
 **Timeframe:** Last 30 days (configurable)
 
 ---
@@ -21,12 +21,19 @@ Related upstream compromise: **[Trivy Supply Chain Attack](https://www.aquasec.c
 | Aspect | Detail |
 |--------|--------|
 | **Affected Packages** | `litellm==1.82.7`, `litellm==1.82.8` (removed from PyPI) |
-| **Compromise Window** | March 24, 2026, 10:39–16:00 UTC |
-| **Attack Vector** | Compromised maintainer PyPI account (via Trivy CI/CD compromise) |
-| **Payload** | Credential stealer in `proxy_server.py` + `litellm_init.pth` (v1.82.8) |
-| **C2 Domain** | `models.litellm[.]cloud` (NOT a legitimate BerriAI domain) |
-| **Exfil Method** | POST request with encrypted stolen data |
-| **Targets** | Environment variables, SSH keys, AWS/GCP/Azure credentials, K8s tokens, DB passwords |
+| **Compromise Window** | March 24, 2026, 10:39–16:00 UTC (46 minutes before PyPI quarantine) |
+| **Downloads During Window** | 46,996 (32,464 for v1.82.8, 14,532 for v1.82.7) |
+| **Dependent Packages** | 2,337 on PyPI — 88% had version specs allowing compromised versions |
+| **Attack Vector** | Compromised maintainer PyPI account (via Checkmarx/Trivy CI/CD compromise) |
+| **v1.82.8 Payload** | `litellm_init.pth` — .pth startup hook, runs on ANY Python interpreter start including `pip install` itself. Fork bomb bug made it visible |
+| **v1.82.7 Payload** | Injected in `proxy_server.py`, drops `p.py` — triggers only when `litellm.proxy` is imported (proxy servers, not SDK) |
+| **C2 Domain (v1.82.8)** | `models.litellm[.]cloud` (NOT a legitimate BerriAI domain) |
+| **C2 Domain (v1.82.7)** | `checkmarx[.]zone/raw` (typosquat of legitimate Checkmarx security vendor) |
+| **Exfil Method** | AES-256-CBC encryption (random session key) + RSA-4096 public key wrapping → tar archive → POST to C2 |
+| **Persistence** | `~/.config/sysmon/sysmon.py` + `~/.config/systemd/user/sysmon.service` |
+| **K8s Lateral Movement** | Reads ALL cluster secrets, deploys privileged `alpine:latest` pods (`node-setup-*`) on every node in `kube-system` with host filesystem mount |
+| **Credential Targets** | Env vars, SSH keys, AWS/GCP/Azure creds, K8s tokens/configs, DB passwords, git creds, Docker configs, npm/vault tokens, shell history, crypto wallets, SSL private keys, CI/CD files, IMDS metadata |
+| **MCP Attack Surface** | Cursor/Claude Code MCP servers with unpinned litellm transitive deps pulled malicious version via `uvx` auto-download |
 
 ### MITRE ATT&CK Coverage
 
@@ -34,24 +41,45 @@ Related upstream compromise: **[Trivy Supply Chain Attack](https://www.aquasec.c
 |-----------|----|-----------|
 | Supply Chain Compromise: Compromise Software Supply Chain | T1195.002 | Malicious PyPI package upload |
 | Command and Scripting Interpreter: Python | T1059.006 | Python payload execution via pip install |
-| Obfuscated Files or Information | T1027 | Encrypted exfiltration payload |
+| Obfuscated Files or Information | T1027 | Double base64-encoded payload, AES-256 + RSA-4096 encrypted exfil |
 | Credentials from Password Stores | T1555 | Credential harvesting from config files |
-| Unsecured Credentials: Credentials In Files | T1552.001 | SSH keys, cloud credential files, .env files |
-| Exfiltration Over C2 Channel | T1041 | POST to models.litellm[.]cloud |
+| Unsecured Credentials: Credentials In Files | T1552.001 | SSH keys, cloud credential files, .env files, git creds, Docker configs |
+| Unsecured Credentials: Container API | T1552.007 | K8s service account tokens, IMDS metadata endpoint queries |
+| Exfiltration Over C2 Channel | T1041 | POST to models.litellm[.]cloud (v1.82.8) and checkmarx[.]zone (v1.82.7) |
 | Application Layer Protocol: Web Protocols | T1071.001 | HTTPS C2 communication |
 | Boot or Logon Autostart Execution: .pth Startup | T1547.004 | `litellm_init.pth` runs Python code at interpreter startup |
-| System Information Discovery | T1082 | Environment variable enumeration |
-| File and Directory Discovery | T1083 | Scanning for credential files (SSH, cloud configs) |
+| Create or Modify System Process: Systemd Service | T1543.002 | `~/.config/systemd/user/sysmon.service` persistence |
+| Deploy Container | T1610 | Privileged `alpine:latest` pods (`node-setup-*`) on every K8s node |
+| System Information Discovery | T1082 | Environment variable enumeration, hostname, whoami, uname |
+| File and Directory Discovery | T1083 | Scanning for credential files (SSH, cloud configs, crypto wallets) |
 | Data from Local System | T1005 | Collecting secrets from local filesystem |
+| Endpoint Denial of Service: Application or System Exploitation | T1499.004 | Fork bomb from .pth re-trigger bug (detection artifact) |
 
 ### IoCs
 
 | Indicator | Type | Notes |
 |-----------|------|-------|
-| `models.litellm[.]cloud` | Domain | C2 exfiltration endpoint (NOT legitimate BerriAI) |
-| `litellm_init.pth` | Filename | Malicious .pth file in site-packages (v1.82.8) |
-| `litellm==1.82.7` | Package version | Compromised PyPI release |
-| `litellm==1.82.8` | Package version | Compromised PyPI release |
+| `models.litellm[.]cloud` | Domain | C2 exfiltration endpoint for v1.82.8 (NOT legitimate BerriAI) |
+| `checkmarx[.]zone` | Domain | C2 exfiltration endpoint for v1.82.7 (typosquat of legitimate Checkmarx) |
+| `litellm_init.pth` | Filename | Malicious .pth file in site-packages (v1.82.8), sha256=`ceNa7wMJnNHy1kRnNCcwJaFjWX3pORLfMh7xGL8TUjg` |
+| `p.py` | Filename | Secondary script dropped by v1.82.7 payload |
+| `~/.config/sysmon/sysmon.py` | File path | Persistent backdoor installed on compromised host |
+| `~/.config/systemd/user/sysmon.service` | File path | Systemd persistence service for backdoor |
+| `node-setup-*` | K8s pod name | Privileged pods deployed in `kube-system` for lateral movement |
+| `litellm==1.82.7` | Package version | Compromised PyPI release (proxy_server.py payload) |
+| `litellm==1.82.8` | Package version | Compromised PyPI release (.pth payload) |
+| `tpcp.tar.gz` | Filename | Encrypted exfil archive created before POST to C2 |
+
+### References
+
+| Source | URL |
+|--------|-----|
+| BerriAI Official Disclosure | https://docs.litellm.ai/blog/security-update-march-2026 |
+| FutureSearch — Initial Discovery | https://futuresearch.ai/blog/litellm-pypi-supply-chain-attack/ |
+| FutureSearch — Post-Mortem | https://futuresearch.ai/blog/no-prompt-injection-required/ |
+| FutureSearch — Blast Radius Analysis | https://futuresearch.ai/blog/litellm-hack-were-you-one-of-the-47000/ |
+| GitHub Issue #24512 | https://github.com/BerriAI/litellm/issues/24512 |
+| Snyk Analysis | https://snyk.io/articles/poisoned-security-scanner-backdooring-litellm/ |
 
 ---
 
@@ -747,6 +775,390 @@ ASimDnsActivityLogs
 
 ---
 
+### Query 19 — Second C2 Domain: checkmarx[.]zone DNS Lookups (ASIM DNS)
+
+**Goal:** Detect DNS resolution of the v1.82.7 C2 domain `checkmarx.zone` — a typosquat of the legitimate security vendor Checkmarx. Any hit is high-fidelity.  
+**MITRE:** T1071.001, T1041
+
+<!-- cd-metadata
+cd_ready: true
+schedule: "1h"
+category: "Exfiltration"
+title: "PyPI Supply Chain — checkmarx.zone C2 DNS Lookup"
+description: "Detects DNS queries for the checkmarx.zone typosquat domain used as C2 by compromised litellm v1.82.7. Any resolution of this domain is a strong compromise indicator."
+severity: "High"
+impactedAssets: ["DeviceId"]
+-->
+
+```kql
+// v1.82.7 C2 domain — typosquat of legitimate Checkmarx security vendor
+ASimDnsActivityLogs
+| where TimeGenerated > ago(30d)
+| where DnsQuery has "checkmarx.zone"
+| project 
+    TimeGenerated,
+    SrcIpAddr,
+    SrcHostname,
+    DnsQuery,
+    DnsResponseName,
+    EventResultDetails,
+    DnsQueryType,
+    EventResult
+| order by TimeGenerated desc
+```
+
+---
+
+### Query 20 — Second C2 Domain: checkmarx[.]zone Network Connections (DeviceNetworkEvents)
+
+**Goal:** Detect direct network connections to the v1.82.7 C2 domain from endpoints. Covers cases where DNS resolution isn't logged but the connection is.  
+**MITRE:** T1071.001, T1041
+
+<!-- cd-metadata
+cd_ready: true
+schedule: "1h"
+category: "Exfiltration"
+title: "PyPI Supply Chain — checkmarx.zone C2 Network Connection"
+description: "Detects outbound network connections to checkmarx.zone, the C2 domain used by compromised litellm v1.82.7 to exfiltrate stolen credentials."
+severity: "High"
+impactedAssets: ["DeviceId"]
+-->
+
+```kql
+// Outbound connections to v1.82.7 C2
+DeviceNetworkEvents
+| where Timestamp > ago(30d)
+| where RemoteUrl has "checkmarx.zone" or RemoteUrl has "checkmarx[.]zone"
+| project 
+    Timestamp,
+    DeviceName,
+    RemoteUrl,
+    RemoteIP,
+    RemotePort,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine,
+    InitiatingProcessAccountName
+| order by Timestamp desc
+```
+
+---
+
+### Query 21 — Sysmon.py Persistence Backdoor File Creation (DeviceFileEvents)
+
+**Goal:** Detect creation of the persistent backdoor file `sysmon.py` in `~/.config/sysmon/`. The malware installs this to maintain access after the initial package is removed.  
+**MITRE:** T1547.004, T1543.002
+
+<!-- cd-metadata
+cd_ready: true
+schedule: "1h"
+category: "Persistence"
+title: "PyPI Supply Chain — sysmon.py Persistence Backdoor"
+description: "Detects creation of sysmon.py in ~/.config/sysmon/ — a persistent backdoor installed by the compromised litellm package to survive package removal."
+severity: "High"
+impactedAssets: ["DeviceId"]
+-->
+
+```kql
+// Persistent backdoor dropped by the malware
+DeviceFileEvents
+| where Timestamp > ago(30d)
+| where FolderPath has ".config/sysmon" 
+    or FolderPath has ".config\\sysmon"
+| project 
+    Timestamp,
+    DeviceName,
+    ActionType,
+    FileName,
+    FolderPath,
+    SHA256,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine
+| order by Timestamp desc
+```
+
+---
+
+### Query 22 — Systemd User Service Persistence (DeviceFileEvents)
+
+**Goal:** Detect creation of the systemd user service `sysmon.service` used for persistence. This ensures the backdoor restarts automatically.  
+**MITRE:** T1543.002
+
+<!-- cd-metadata
+cd_ready: true
+schedule: "1h"
+category: "Persistence"
+title: "PyPI Supply Chain — Systemd User Service Persistence"
+description: "Detects creation of sysmon.service in ~/.config/systemd/user/ — systemd persistence mechanism installed by compromised litellm to auto-restart the backdoor."
+severity: "High"
+impactedAssets: ["DeviceId"]
+-->
+
+```kql
+// Systemd persistence for the backdoor
+DeviceFileEvents
+| where Timestamp > ago(30d)
+| where (FolderPath has ".config/systemd/user" or FolderPath has ".config\\systemd\\user")
+    and FileName endswith ".service"
+| project 
+    Timestamp,
+    DeviceName,
+    ActionType,
+    FileName,
+    FolderPath,
+    SHA256,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine
+| order by Timestamp desc
+```
+
+---
+
+### Query 23 — Kubernetes Secret Enumeration and Lateral Movement (DeviceProcessEvents)
+
+**Goal:** Detect kubectl commands used by the malware to enumerate secrets across all namespaces and deploy privileged pods. The attack creates `node-setup-*` pods in `kube-system` on every node with host filesystem mounts.  
+**MITRE:** T1552.007, T1610
+
+<!-- cd-metadata
+cd_ready: true
+schedule: "1h"
+category: "LateralMovement"
+title: "PyPI Supply Chain — K8s Secret Theft and Privileged Pod Deployment"
+description: "Detects kubectl commands for enumerating all secrets across namespaces or creating privileged pods (node-setup-*) — K8s lateral movement from the compromised litellm payload."
+severity: "High"
+impactedAssets: ["DeviceId"]
+-->
+
+```kql
+// K8s lateral movement: secret theft + privileged pod creation
+DeviceProcessEvents
+| where Timestamp > ago(30d)
+| where FileName in~ ("kubectl", "kubectl.exe")
+| where ProcessCommandLine has_any (
+    "get secrets --all-namespaces",
+    "get secrets -A",
+    "get secret --all-namespaces",
+    "get secret -A",
+    "node-setup",
+    "create -f" // pod creation from manifest
+    )
+    or (ProcessCommandLine has "run" and ProcessCommandLine has "alpine" and ProcessCommandLine has "privileged")
+| project 
+    Timestamp,
+    DeviceName,
+    AccountName,
+    ProcessCommandLine,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine
+| order by Timestamp desc
+```
+
+---
+
+### Query 24 — Fork Bomb Detection: Exponential Python Process Spawning (DeviceProcessEvents)
+
+**Goal:** Detect the .pth file bug that causes exponential Python process spawning. The `litellm_init.pth` re-triggers on every Python startup including its own subprocess, creating a fork bomb. This is a high-confidence detection artifact — any device with 50+ Python processes in an hour is likely affected.  
+**MITRE:** T1499.004, T1059.006
+
+<!-- cd-metadata
+cd_ready: true
+schedule: "1h"
+category: "Execution"
+title: "PyPI Supply Chain — Python Fork Bomb (.pth Re-trigger)"
+description: "Detects exponential Python process spawning caused by the litellm_init.pth bug. The .pth file triggers on every Python startup including its own child, creating a visible fork bomb — 50+ processes/hour is abnormal."
+severity: "High"
+impactedAssets: ["DeviceId"]
+-->
+
+```kql
+// Fork bomb from .pth re-trigger bug — extremely high Python process count
+DeviceProcessEvents
+| where Timestamp > ago(7d)
+| where FileName in~ ("python.exe", "python3.exe", "python", "python3", "pythonw.exe")
+| summarize 
+    ProcessCount = count(),
+    UniqueCommandLines = dcount(ProcessCommandLine),
+    SampleCommands = make_set(ProcessCommandLine, 5),
+    Users = make_set(AccountName, 5)
+    by DeviceName, bin(Timestamp, 1h)
+| where ProcessCount > 50
+| order by ProcessCount desc
+```
+
+---
+
+### Query 25 — MCP Server / uvx Transitive Dependency Pull (DeviceProcessEvents)
+
+**Goal:** Detect `uvx` commands that may have pulled litellm as a transitive dependency. Cursor and Claude Code MCP servers using unpinned litellm deps auto-downloaded the compromised version via `uvx`.  
+**MITRE:** T1195.002, T1059.006
+
+<!-- cd-metadata
+cd_ready: false
+adaptation_notes: "Hunting query for MCP/uvx vector — broad filter on uvx commands requires environment tuning. Not all uvx invocations are malicious."
+-->
+
+```kql
+// MCP server / uvx transitive dependency pull
+DeviceProcessEvents
+| where Timestamp > ago(30d)
+| where FileName in~ ("uvx", "uvx.exe", "uv", "uv.exe")
+    or (ProcessCommandLine has "uvx" and ProcessCommandLine has_any ("litellm", "mcp"))
+| project 
+    Timestamp,
+    DeviceName,
+    AccountName,
+    ProcessCommandLine,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine
+| order by Timestamp desc
+```
+
+---
+
+### Query 26 — Git Credential and Docker Config File Access by Python (DeviceFileEvents)
+
+**Goal:** Detect Python processes reading git credentials (`.gitconfig`, `.git-credentials`) and Docker configs (`config.json` in docker/kaniko paths). These are high-value targets in the Stage 1 credential sweep.  
+**MITRE:** T1552.001, T1005
+
+<!-- cd-metadata
+cd_ready: true
+schedule: "1h"
+category: "CredentialAccess"
+title: "PyPI Supply Chain — Git/Docker Credential Access by Python"
+description: "Detects Python processes reading git credentials (.gitconfig, .git-credentials) or Docker configs — high-value targets in the litellm Stage 1 credential sweep."
+severity: "Medium"
+impactedAssets: ["DeviceId"]
+-->
+
+```kql
+// Git credential and Docker config access by Python processes
+DeviceFileEvents
+| where Timestamp > ago(30d)
+| where InitiatingProcessFileName in~ ("python.exe", "python3.exe", "python", "python3", "pythonw.exe")
+| where (FileName in~ (".gitconfig", ".git-credentials", "credentials") 
+        and FolderPath has_any ("home", "Users"))
+    or (FileName =~ "config.json" 
+        and FolderPath has_any (".docker", "kaniko"))
+| project 
+    Timestamp,
+    DeviceName,
+    ActionType,
+    FileName,
+    FolderPath,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine
+| order by Timestamp desc
+```
+
+---
+
+### Query 27 — IMDS Metadata Endpoint Access from Python (DeviceNetworkEvents)
+
+**Goal:** Detect Python processes connecting to the cloud Instance Metadata Service (169.254.169.254). The malware queries IMDS to steal cloud instance credentials (AWS IAM role tokens, Azure managed identity tokens, GCP access tokens).  
+**MITRE:** T1552.007, T1082
+
+<!-- cd-metadata
+cd_ready: true
+schedule: "1h"
+category: "CredentialAccess"
+title: "PyPI Supply Chain — IMDS Metadata Access from Python"
+description: "Detects Python processes connecting to the cloud IMDS endpoint (169.254.169.254) to steal instance credentials — AWS IAM role tokens, Azure managed identity tokens, GCP access tokens."
+severity: "Medium"
+impactedAssets: ["DeviceId"]
+-->
+
+```kql
+// Cloud IMDS metadata endpoint access from Python
+DeviceNetworkEvents
+| where Timestamp > ago(30d)
+| where RemoteIP == "169.254.169.254"
+| where InitiatingProcessFileName in~ ("python.exe", "python3.exe", "python", "python3", "pythonw.exe")
+| project 
+    Timestamp,
+    DeviceName,
+    RemoteIP,
+    RemotePort,
+    RemoteUrl,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine,
+    InitiatingProcessAccountName
+| order by Timestamp desc
+```
+
+---
+
+### Query 28 — v1.82.7-Specific: proxy_server.py Modification or p.py Drop (DeviceFileEvents)
+
+**Goal:** Detect artifacts specific to v1.82.7: modification of `proxy_server.py` (where the payload was injected) or creation of `p.py` (the dropped secondary script). These are distinct from the v1.82.8 .pth attack.  
+**MITRE:** T1195.002, T1059.006
+
+<!-- cd-metadata
+cd_ready: true
+schedule: "1h"
+category: "Execution"
+title: "PyPI Supply Chain — v1.82.7 proxy_server.py / p.py Artifacts"
+description: "Detects v1.82.7-specific artifacts: modification of proxy_server.py (payload injection point) or creation of p.py (dropped secondary script). Distinct from the v1.82.8 .pth attack vector."
+severity: "High"
+impactedAssets: ["DeviceId"]
+-->
+
+```kql
+// v1.82.7 specific artifacts
+DeviceFileEvents
+| where Timestamp > ago(30d)
+| where (FileName =~ "p.py" and FolderPath has_any ("litellm", "site-packages", "temp", "tmp"))
+    or (FileName =~ "proxy_server.py" and FolderPath has "litellm" 
+        and ActionType == "FileModified")
+| project 
+    Timestamp,
+    DeviceName,
+    ActionType,
+    FileName,
+    FolderPath,
+    SHA256,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine
+| order by Timestamp desc
+```
+
+---
+
+### Query 29 — Shell History and Package Manager Config Access by Python (DeviceFileEvents)
+
+**Goal:** Detect Python processes accessing shell history files and package manager configs. The malware harvests `.bash_history`, `.zsh_history`, `.mysql_history`, `.psql_history`, `.npmrc`, `.vault-token`, `.netrc`, `.my.cnf`, `.pgpass`, and `.mongorc.js` for credentials and operational intelligence.  
+**MITRE:** T1552.001, T1005, T1083
+
+<!-- cd-metadata
+cd_ready: true
+schedule: "1h"
+category: "CredentialAccess"
+title: "PyPI Supply Chain — Shell History and Config Harvesting by Python"
+description: "Detects Python processes reading shell history files (.bash_history, .zsh_history) and package manager configs (.npmrc, .vault-token, .pgpass) — credential and operational intelligence harvesting from the litellm payload."
+severity: "Medium"
+impactedAssets: ["DeviceId"]
+-->
+
+```kql
+// Shell history and package manager config harvesting
+DeviceFileEvents
+| where Timestamp > ago(30d)
+| where InitiatingProcessFileName in~ ("python.exe", "python3.exe", "python", "python3", "pythonw.exe")
+| where FileName in~ (
+    ".bash_history", ".zsh_history", ".mysql_history", ".psql_history", ".rediscli_history",
+    ".npmrc", ".vault-token", ".netrc", ".my.cnf", ".pgpass", ".mongorc.js"
+    )
+| project 
+    Timestamp,
+    DeviceName,
+    ActionType,
+    FileName,
+    FolderPath,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine
+| order by Timestamp desc
+```
+
+---
+
 ## Triage Playbook
 
 If any of the above queries return positive results:
@@ -756,19 +1168,26 @@ If any of the above queries return positive results:
 1. **Isolate affected device** via MDE device isolation
 2. **Identify installed version**: On affected system run `pip show litellm` — if version is 1.82.7 or 1.82.8, treat as confirmed compromise
 3. **Check for .pth file**: Search for `litellm_init.pth` in Python site-packages directories
-4. **Rotate ALL secrets** accessible from that device: API keys, SSH keys, cloud credentials, K8s tokens, DB passwords, environment variables
+4. **Check for persistence**: Look for `~/.config/sysmon/sysmon.py` and `~/.config/systemd/user/sysmon.service`
+5. **Rotate ALL secrets** accessible from that device: API keys, SSH keys, cloud credentials, K8s tokens, DB passwords, environment variables, git creds, Docker registry tokens
 
 ### Investigation Steps
 
 1. **Scope impact**: Run Query 2 to find all pip activity on the affected device
-2. **Check C2 traffic**: Run Queries 5 + 6 to confirm exfiltration attempts
-3. **Credential file access**: Run Query 11 to check what secrets were accessed
-4. **Timeline correlation**: Run Query 14 to trace pip install → network activity chain
-5. **Lateral movement risk**: Check if stolen credentials were used elsewhere (pivot to user-investigation or authentication-tracing skills)
+2. **Check C2 traffic**: Run Queries 5 + 6 (v1.82.8 C2) AND Queries 19 + 20 (v1.82.7 C2) to confirm exfiltration attempts
+3. **Persistence check**: Run Queries 21 + 22 to detect installed backdoors
+4. **Fork bomb evidence**: Run Query 24 — if Python process counts spiked, device was affected by the .pth bug
+5. **Credential file access**: Run Queries 11 + 26 + 29 to check what secrets were accessed
+6. **K8s lateral movement**: If K8s environment, run Query 23 for secret enumeration and privileged pod deployment
+7. **Cloud credential theft**: Run Query 27 for IMDS metadata access
+8. **Timeline correlation**: Run Query 14 to trace pip install → network activity chain
+9. **Lateral movement risk**: Check if stolen credentials were used elsewhere (pivot to user-investigation or authentication-tracing skills)
 
 ### Evidence Preservation
 
 - Export `DeviceProcessEvents` for affected device/timeframe
 - Capture DNS logs around the compromise window
-- Preserve network connection logs showing C2 communication
+- Preserve network connection logs showing C2 communication to BOTH `models.litellm[.]cloud` and `checkmarx[.]zone`
+- Check for persistence artifacts: `~/.config/sysmon/` directory, systemd user services
+- If K8s: enumerate `node-setup-*` pods in `kube-system` namespace
 - Document all rotated credentials and rotation timestamps
