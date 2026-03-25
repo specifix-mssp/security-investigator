@@ -158,15 +158,19 @@ rows:
         # data_lake_tool_breakdown, sort by calls desc, take top 5.
         # Include server name in label for disambiguation.
 
-      - type: donut-chart
-        title: "Data Lake: MCP vs Direct KQL"
-        field: mcp_vs_direct_kql            # from §6.1 — {mcp_calls, mcp_pct, direct_calls, direct_pct}
+      - type: table-widget
+        title: "Top MCP Users"
+        field: top_mcp_users                # from §9 — array of {rank, user, servers_used, servers, total_calls}
         width_pct: 45
-        segments:
-          - { label: "MCP-Driven", color: server_colors.data_lake_mcp }
-          - { label: "Portal / Other", color: palette.muted }
-        show_legend: true
-        show_center_total: true
+        columns:
+          - { header: "#",            field: "rank",         width: 8 }
+          - { header: "User",         field: "user",         width: 32 }
+          - { header: "Servers",      field: "servers_used",  width: 14 }
+          - { header: "MCP Servers",  field: "servers",      width: 28 }
+          - { header: "Calls",        field: "total_calls",  width: 18 }
+        max_rows: 5
+        # Data derivation: Query 15 cross-server user breadth results.
+        # Rank by ServerCount desc, TotalCalls desc. Truncate UPN to display name where possible.
 
   # ── ROW 5: Weekly Trend + Recommendations ──────────────────────────────────
   # Line chart: 2 series only (Triage + Data Lake — these dominate 95%+ of volume).
@@ -213,7 +217,8 @@ data_sources:
     §5 (Triage MCP)      → triage_mcp_endpoints (for top_endpoints_combined merge),
                             daily_mcp_trend.triage_mcp
     §6 (Data Lake MCP)   → data_lake_tool_breakdown (for top_endpoints_combined merge),
-                            mcp_vs_direct_kql, daily_mcp_trend.data_lake_mcp
+                            daily_mcp_trend.data_lake_mcp
+    §9 (Top MCP Users)   → top_mcp_users (rank, user, servers_used, servers, total_calls)
     §10 (Score)          → mcp_usage_score, score_dimensions (5 dims × score/max/rating)
     §12 (Recommendations)→ recommendations (priority, title, description)
     Combined             → top_endpoints_combined (merge §4+§5+§6 endpoints, top 5 by calls)

@@ -1,6 +1,6 @@
 ---
 name: mcp-usage-monitoring
-description: 'Use this skill when asked to monitor, audit, or analyze MCP (Model Context Protocol) server usage in the environment. Triggers on keywords like "MCP usage", "MCP server monitoring", "MCP activity", "Graph MCP", "Sentinel MCP", "Azure MCP", "AI agent monitoring", "MCP audit", "tool usage monitoring", "MCP breakdown", "who is using MCP", or when investigating AI agent access patterns, Graph API calls from MCP servers, or workspace query governance. This skill provides comprehensive MCP server telemetry analysis across Graph MCP, Sentinel MCP, and Azure MCP servers including usage trends, endpoint access patterns, user attribution, sensitive API detection, workspace query governance, and security risk assessment with inline and markdown file reporting.'
+description: 'Use this skill when asked to monitor, audit, or analyze MCP (Model Context Protocol) server usage in the environment. Triggers on keywords like "MCP usage", "MCP server monitoring", "MCP activity", "Graph MCP", "Sentinel MCP", "Azure MCP", "MCP audit", "tool usage monitoring", "MCP breakdown", "who is using MCP", or when investigating MCP user activity, Graph API calls from MCP servers, or workspace query governance. This skill provides comprehensive MCP server telemetry analysis across Graph MCP, Sentinel MCP, and Azure MCP servers including usage trends, endpoint access patterns, user attribution, cross-server user analysis, sensitive API detection, workspace query governance, and security risk assessment with inline and markdown file reporting.'
 ---
 
 # MCP Server Usage Monitoring — Instructions
@@ -24,8 +24,8 @@ This skill monitors and audits **Model Context Protocol (MCP) server usage** acr
 - Graph API call volume, trends, and endpoint diversity via MCP
 - Sensitive/high-risk Graph endpoint access (PIM, credentials, Identity Protection)
 - Sentinel workspace query patterns by client application
-- **User vs. Service Principal vs. Agent Identity attribution** across all MCP channels
-- **Entra Agent ID detection** — distinguishes AI agent identities from standard SPNs and human users (see [Agent Identity Detection](#agent-identity-detection))
+- **User vs. Service Principal attribution** across all MCP channels
+- **Cross-server user analysis** — identifies users with broadest MCP footprint (multiple server types, highest call volume)
 - Azure ARM operations potentially originating from Azure MCP Server
 - Non-MCP platform query sources for governance context (Sentinel Engine, Logic Apps)
 - **Sentinel Data Lake MCP tool usage** — tool call breakdown (`query_lake`, `list_sentinel_workspaces`, `search_tables`, etc.), success/failure rates, execution duration, tables accessed via `CloudAppEvents` (Purview unified audit)
@@ -40,8 +40,7 @@ This skill monitors and audits **Model Context Protocol (MCP) server usage** acr
 ## 📑 TABLE OF CONTENTS
 
 1. **[Critical Workflow Rules](#-critical-workflow-rules---read-first-)** - Start here!
-2. **[Agent Identity Detection](#agent-identity-detection)** - Entra Agent ID vs SPN vs User
-3. **[Extended MCP Server Landscape](#extended-microsoft-mcp-server-landscape-reference)** - Full Microsoft MCP ecosystem catalog
+2. **[Extended MCP Server Landscape](#extended-microsoft-mcp-server-landscape-reference)** - Full Microsoft MCP ecosystem catalog
 4. **[Output Modes](#output-modes)** - Inline chat vs. Markdown file
 5. **[Scalability & Token Management](#scalability--token-management)** - Guidance for large environments
 6. **[Quick Start](#quick-start-tldr)** - 10-step investigation pattern
@@ -68,111 +67,9 @@ This skill monitors and audits **Model Context Protocol (MCP) server usage** acr
 6. **ALWAYS run independent queries in parallel** for performance
 7. **ALWAYS attribute activity to specific users** — never present anonymous aggregates
 8. **NEVER conflate non-MCP platform activity with MCP activity** — clearly label categories
-9. **ALWAYS check for Agent Identity (Entra Agent ID) callers** — distinguish AI agents from human users and standard SPNs (see [Agent Identity Detection](#agent-identity-detection))
-10. **ALWAYS execute pre-authored queries from [Sample KQL Queries](#sample-kql-queries) EXACTLY as written** — substitute only the time range parameter (e.g., `ago(30d)` → `ago(90d)`). These queries encode mitigations for schema pitfalls documented in [Known Pitfalls](#known-pitfalls). Writing equivalent queries from scratch is ❌ **PROHIBITED**
+9. **ALWAYS execute pre-authored queries from [Sample KQL Queries](#sample-kql-queries) EXACTLY as written** — substitute only the time range parameter (e.g., `ago(30d)` → `ago(90d)`). These queries encode mitigations for schema pitfalls documented in [Known Pitfalls](#known-pitfalls). Writing equivalent queries from scratch is ❌ **PROHIBITED**
 
----
 
-## Agent Identity Detection
-
-**Microsoft Entra Agent ID** (public preview) introduces a **new first-class identity type** for AI agents, distinct from traditional service principals and user accounts. MCP servers may be called by human users, standard SPNs, or Agent Identities — and the telemetry to distinguish them varies by table.
-
-> **Reference:** [What are agent identities](https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/what-is-agent-id) | [Agent sign-in and audit logs](https://learn.microsoft.com/en-us/entra/agent-id/identity-professional/sign-in-audit-logs-agents) | [Agent OAuth protocols](https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/agent-oauth-protocols)
-
-### Entra Identity Taxonomy
-
-| Identity Category | Types | MCP Usage Pattern |
-|---|---|---|
-| **Human identities** | User accounts (workforce, external) | User signs into VS Code → MCP server acts on behalf of user (delegated) |
-| **Workload identities** | App registrations, service principals, managed identities | Standard SPN authenticates to MCP (client credentials / app-only) |
-| **🆕 Agent identities** | Agent Identity, Agent Identity Blueprint, Agent User | AI agent uses MCP via Agent OBO, Autonomous App, or Agent User flow |
-
-### Agent ID Object Types
-
-| Object | What It Is | Analogy |
-|---|---|---|
-| **Agent Identity Blueprint** | Reusable template defining a *class* of agent (e.g., "SOC Triage Agent") | Like an app registration |
-| **Agent Identity Blueprint Principal** | SPN created when a blueprint is instantiated in a tenant | Like the SPN for an app registration |
-| **Agent Identity** | Special SPN with subtype `agent` — represents a single agent instance | Like a service principal, but agent-specific |
-| **Agent User** | Optional user account paired 1:1 with an agent identity (for mailbox, Teams, etc.) | Like a user account, but non-human |
-
-**Architectural detail:** Agent identities are modeled as **single-tenant service principals with an "agent" subtype**. The `objectId` and `appId` always have the **same value** (unlike regular app registrations where they differ).
-
-### Agent Authentication Flows
-
-| Flow | Pattern | When Used | Telemetry Impact |
-|---|---|---|---|
-| **Agent On-Behalf-Of (OBO)** | Delegated — agent acts on behalf of a signed-in user | User-initiated agents, copilots | `UserId` = human user, `ServicePrincipalId` = agent SPN |
-| **Autonomous App Flow** | App-only — agent acts under its own authority (`client_credentials`) | Background agents, scheduled tasks | `ServicePrincipalId` = agent SPN, `UserId` empty |
-| **Agent User Flow** | Agent uses its paired agent user account | Agents needing mailbox, Teams access | `UserId` = Agent User (non-human with UPN) |
-
-### How to Detect Agent Identities in Telemetry
-
-**⚠️ Known Limitation (Preview):** `MicrosoftGraphActivityLogs` does NOT yet distinguish Agent IDs from regular SPNs. Requests from agent identities appear as regular applications with the agent identity in the `AppId` column. Requests from agent users appear as regular users with the agent user ID in `UserId`.
-
-**Detection Strategy:**
-
-| Telemetry Source | Detection Method | Reliability | Status |
-|---|---|---|---|
-| **Graph API `/beta` `tags`** | Query `/beta/servicePrincipals/{id}?$select=tags` — check for `AgenticApp`, `AIAgentBuilder`, `AgentCreatedBy:CopilotStudio` tags | 🟢 **Most reliable** | ✅ Available now |
-| **`AuditLogs`** | Agent lifecycle CRUD operations — filter `OperationName has "agent"` or `InitiatedBy` = `Power Virtual Agents Service` | 🟢 High | ✅ Available now |
-| **`AADServicePrincipalSignInLogs`** | Agent sign-ins to resources like `Bot Framework` from Azure internal IPs (`fd00:*`) | 🟢 High | ✅ Available now |
-| **`MicrosoftGraphActivityLogs`** | Join with sign-in logs to identify agent callers by `AppId`/`ServicePrincipalId` | 🟡 Requires cross-ref | ⚠️ Workaround needed |
-| **`SigninLogs`** | New `agentSignIn` resource type; filter by `agent/agentType` | 🟡 Preview-dependent | ✅ Available in preview |
-| **Graph API `servicePrincipalType`** | `GET /servicePrincipals?$filter=servicePrincipalType eq 'Agent'` | 🔴 **Not yet reliable** — Copilot Studio agents still show `"Application"` | ⚠️ Preview gap |
-
-> 🔵 **Field-tested finding:** The `servicePrincipalType` property does NOT yet show `"Agent"` for Copilot Studio-created agents — they still return `"Application"` on both `/v1.0` and `/beta`. The **`tags` array on `/beta`** is currently the only reliable programmatic indicator. Key tags: `AgenticApp`, `AIAgentBuilder`, `AgentCreatedBy:CopilotStudio`, `AgenticInstance`.
-
-**Sign-in log filters for agents:**
-- Portal: Filter by **Agent type** = `Agent Identity` or `Agent ID user` and **Is Agent** = `Yes`
-- Graph API: `$filter=signInEventTypes/any(t: t eq 'servicePrincipal') and agent/agentType eq 'AgentIdentity'`
-
-### MicrosoftGraphActivityLogs — User vs SPN vs Agent Attribution
-
-The `MicrosoftGraphActivityLogs` table has two identity fields that determine "who" is calling Graph APIs:
-
-| Field | Populated When | Identity Type |
-|---|---|---|
-| `UserId` | A **human user** (or Agent User) made the request via delegated permissions | User / Agent User |
-| `ServicePrincipalId` | A **service principal** (or Agent Identity) made the request via app-only permissions | SPN / Agent Identity |
-| `ClientAuthMethod` | Always populated — indicates how the caller authenticated | 0 = public client (user), 1 = client secret (SPN), 2 = certificate (SPN) |
-| `Roles` | Populated when app-only (application permissions) | App-only flow indicator |
-| `Scopes` | Populated when delegated (user context) | Delegated flow indicator |
-
-**Decision tree for caller attribution:**
-```
-IF ServicePrincipalId is populated AND UserId is empty:
-   → App-only flow: SPN or Agent Identity is the autonomous caller
-   → Check ClientAuthMethod: 1 = secret, 2 = certificate
-   → Cross-reference ServicePrincipalId with Entra to determine if Agent Identity
-
-IF UserId is populated AND ServicePrincipalId is populated:
-   → Delegated flow: User (or Agent User) signed in, SPN is the client app
-   → Agent OBO: Agent acts on behalf of user — both fields populated
-
-IF UserId is populated AND ServicePrincipalId is empty:
-   → Direct user-delegated flow (e.g., VS Code → Graph MCP)
-   → Check if UserId maps to an Agent User (non-human account with UPN)
-```
-
-### Products Already Using Agent ID
-
-| Product | Agent ID Usage | Telemetry Fingerprint (Field-Tested) |
-|---|---|---|
-| **Copilot Studio agents** | Each created agent gets an SPN with agentic tags automatically. Initiated by `Power Virtual Agents Service`. Your user gets added as owner. | AuditLogs: `InitiatedBy` = `Power Virtual Agents Service`, `TargetType` = `ServicePrincipal`. SPN sign-ins to `Bot Framework` from Azure internal IPv6 (`fd00:34f2:*`). Tags: `AgenticApp`, `AgentCreatedBy:CopilotStudio`, `AgenticInstance` |
-| **Entra CA Optimization Agent** | Microsoft first-party agent identity | May appear in tenant sign-in logs |
-| **Custom AI agents** | Developers can register agents via Agent Identity Blueprint | Will appear as SPNs with agent subtype |
-
-> ⚠️ **Name ambiguity warning:** An SPN named with "Agent" in its display name does NOT mean it's an Agent Identity. Example: "Contoso Agent Tools" is a standard `GitCreatedApp` with `servicePrincipalType: Application` and no agentic tags. Always verify via `/beta` `tags` — never rely on display name alone.
-
-### Impact on This Skill
-
-When running MCP usage monitoring:
-
-1. **Phase 6 (Agent Detection):** Check BOTH `UserId` and `ServicePrincipalId` in Query 9 results — if `ServicePrincipalId` is populated with a non-empty value, an SPN or Agent Identity is calling Graph MCP autonomously
-2. **Phase 6 (Agent Detection):** Run Query 9 to identify Agent Identities in the tenant and cross-reference against MCP callers
-3. **Report section:** Include a dedicated "Agent vs User Attribution" breakdown showing how many MCP calls originated from humans, standard SPNs, and Agent Identities
-4. **Security flag:** Agent Identities calling sensitive Graph endpoints autonomously (without user OBO context) should be flagged 🟠 — verify authorization
 
 ---
 
@@ -281,10 +178,10 @@ Microsoft Copilot Studio provides a catalog of built-in MCP servers for agent de
 > ⚠️ **Telemetry gap:** Copilot Studio built-in MCP servers are NOT directly visible in `LAQueryLogs` or `MicrosoftGraphActivityLogs`. Their activity may appear in:
 > - `CloudAppEvents` — under Copilot Studio workload (if Purview unified audit is configured)
 > - M365 unified audit log — as Copilot Studio agent actions
-> - `AuditLogs` — agent identity lifecycle events (creation, modification via `Power Virtual Agents Service`)
-> - `AADServicePrincipalSignInLogs` — agent SPN sign-ins to `Bot Framework` from Azure internal IPs (`fd00:*`)
+> - `AuditLogs` — service principal lifecycle events (creation, modification)
+> - `AADServicePrincipalSignInLogs` — SPN sign-ins to `Bot Framework` from Azure internal IPs (`fd00:*`)
 >
-> To monitor Copilot Studio agent activity touching these MCP servers, use the **Agent Identity Detection** workflow (Phase 6) to identify agent SPNs, then trace their sign-in and audit activity.
+> To monitor Copilot Studio agent activity, use the **`ai-agent-posture`** skill for comprehensive agent security auditing.
 
 ### Azure MCP Server — Full Tool Surface
 
@@ -311,7 +208,7 @@ If expanding this skill's coverage, prioritize based on data access risk:
 
 | Priority | Server | Why | How to Monitor |
 |----------|--------|-----|----------------|
-| 🔴 **P1** | Copilot Studio built-in M365 MCPs | Email, Teams, admin center access | Agent Identity Detection (Phase 6) + CloudAppEvents |
+| 🔴 **P1** | Copilot Studio built-in M365 MCPs | Email, Teams, admin center access | `ai-agent-posture` skill + CloudAppEvents |
 | 🔴 **P1** | Security Copilot Agent Creation | Creates autonomous security agents | CloudAppEvents for agent creation events |
 | 🟠 **P2** | Power BI Remote MCP | Dataset query access via API | `PowerBIActivity` table if available |
 | 🟠 **P2** | Sentinel Custom MCP Tools | User-defined tools, same audit surface | Already visible in Phase 3 CloudAppEvents |
@@ -437,7 +334,7 @@ When a user requests MCP usage monitoring:
 6. **Run Phase 3 (Sentinel Data Lake MCP)** → CloudAppEvents tool usage, error analysis, MCP vs Direct KQL
 7. **Run Phase 4 (Azure MCP & ARM)** → ARM operations, resource provider breakdown
 8. **Run Phase 5 (Workspace Governance)** → All query sources (Analytics + Data Lake tiers), MCP proportion
-9. **Run Phase 6 (Agent Identity)** → Entra Agent ID detection, caller attribution
+9. **Run Phase 6 (Cross-Server User Analysis)** → Top MCP users by server breadth, power user identification
 10. **Run Phase 7 (Assessment)** → Compute MCP Usage Score, security assessment, render report
 
 **Parallel execution:** Phases 1-5 contain independent queries — run all of them in parallel for performance. Phases 6-7 depend on results from 1-5.
@@ -535,7 +432,7 @@ Collect:
 **Execution tool:** `RunAdvancedHuntingQuery` preferred (30-day lookback, free for Analytics-tier tables). `CloudAppEvents` uses `Timestamp` in AH (not `TimeGenerated`). Fall back to `mcp_sentinel-data_query_lake` (uses `TimeGenerated`, 90d retention) only if lookback > 30 days or AH returns errors.  
 **Filter:** `ActionType contains "Sentinel"` or `ActionType contains "KQL"`. RecordType is inside `RawEventData` (not a top-level column) — extract with `parse_json(tostring(RawEventData)).RecordType`. RecordType 403 = MCP tools, 379 = Direct KQL.
 
-**⚠️ MANDATORY:** Execute Query 12 against `query_lake` before reporting any gap. If the query returns 0 results or table-not-found, THEN report the gap. Do NOT skip this phase based on assumptions about E5 licensing or Purview configuration — the table may be populated even without explicit Purview setup.
+**⚠️ MANDATORY:** Execute Query 10 against `query_lake` before reporting any gap. If the query returns 0 results or table-not-found, THEN report the gap. Do NOT skip this phase based on assumptions about E5 licensing or Purview configuration — the table may be populated even without explicit Purview setup.
 
 **Audit Path:** Sentinel Data Lake MCP tools are NOT audited via `LAQueryLogs` — they are tracked through Purview unified audit log, surfaced in the `CloudAppEvents` table. RecordType 403 (inside `RawEventData`) = Sentinel AI Tool activities, RecordType 379 = KQL activities.
 
@@ -565,9 +462,9 @@ Collect:
 | `InputParameters` | Full tool input including KQL query text and workspaceId | JSON string with `query` and `workspaceId` keys |
 
 Collect:
-- **Execute Query 12** to get Data Lake MCP access pattern summary (tool/table/workspace inventory with MCP vs Direct KQL delineation)
-- **Execute Query 13** to get tool-level breakdown with call counts and avg execution duration
-- **Execute Query 14** to get error analysis for failed Data Lake MCP tool calls
+- **Execute Query 10** to get Data Lake MCP access pattern summary (tool/table/workspace inventory with MCP vs Direct KQL delineation)
+- **Execute Query 11** to get tool-level breakdown with call counts and avg execution duration
+- **Execute Query 12** to get error analysis for failed Data Lake MCP tool calls
 
 ### Phase 4: Azure MCP Server Authentication & Queries
 
@@ -575,8 +472,8 @@ Collect:
 **Filter:** AppId = `04b07795-8ddb-461a-bbee-02f9e1bf7b46` (sign-in logs, LAQueryLogs)
 
 Collect:
-- **Execute Query 15** to get **Azure MCP Server authentication events** from SigninLogs/AADNonInteractiveUserSignInLogs — filter by AppId `04b07795` (Azure CLI credential, field-tested Feb 2026). 🔄 Previously documented as AppId `1950a258` (AzurePowerShellCredential) — that path is obsolete.
-- **Execute Query 16** to get **Azure MCP Server workspace queries** from LAQueryLogs — filter by AADClientId `04b07795`. `RequestClientApp` is **empty** (not a unique fingerprint). Azure MCP appends `\n| limit N` to query text — use query text pattern as differentiator.
+- **Execute Query 13** to get **Azure MCP Server authentication events** from SigninLogs/AADNonInteractiveUserSignInLogs — filter by AppId `04b07795` (Azure CLI credential, field-tested Feb 2026). 🔄 Previously documented as AppId `1950a258` (AzurePowerShellCredential) — that path is obsolete.
+- **Execute Query 14** to get **Azure MCP Server workspace queries** from LAQueryLogs — filter by AADClientId `04b07795`. `RequestClientApp` is **empty** (not a unique fingerprint). Azure MCP appends `\n| limit N` to query text — use query text pattern as differentiator.
 
 **Detection Method (🔄 Updated Feb 2026):**
 
@@ -592,7 +489,7 @@ The Azure MCP Server runs as a local .NET process (stdio mode) and authenticates
 | **AADClientId** (LAQueryLogs) | `04b07795` | `04b07795` | Shared |
 | **RequestClientApp** (LAQueryLogs) | **Empty** (`""`) | **Empty** (`""`) | Shared — not a unique differentiator. Empty `RequestClientApp` is also used by 4+ other AADClientIds |
 | **Query text pattern** (LAQueryLogs) | Appends `\n\| limit N` to all queries | No standard suffix | ✅ **Best differentiator** — Azure MCP `monitor_workspace_log_query` always appends a limit operator |
-| **AzureActivity** (Claims.appid) | `04b07795` (write ops only) | `04b07795` | Shared; read ops not logged. Use Q16 `HasLimitSuffix` for query-level differentiation |
+| **AzureActivity** (Claims.appid) | `04b07795` (write ops only) | `04b07795` | Shared; read ops not logged. Use Q14 `HasLimitSuffix` for query-level differentiation |
 
 **🚨 Key change from previous documentation:**
 - ❌ `RequestClientApp = "csharpsdk,LogAnalyticsPSClient"` — **OBSOLETE**, no longer produced by Azure MCP Server
@@ -631,31 +528,29 @@ The Azure MCP Server runs as a local .NET process (stdio mode) and authenticates
 
 Collect:
 - **Execute Query 8** to get all clients querying the Analytics tier workspace with query counts, user counts, CPU usage
-- Data Lake tier query volume from Phase 3 results (Queries 12-14)
+- Data Lake tier query volume from Phase 3 results (Queries 10-12)
 - MCP proportion calculation: combined MCP query volume (Analytics + Data Lake tiers) / total query volume
 
-### Phase 6: Agent Identity Detection
+### Phase 6: Cross-Server User Analysis
 
-**Data sources:** `MicrosoftGraphActivityLogs`, `AADServicePrincipalSignInLogs`, `AuditLogs`, Microsoft Graph API
+**Data sources:** `MicrosoftGraphActivityLogs`, `CloudAppEvents`, `SigninLogs`, `AADNonInteractiveUserSignInLogs`
 
 Collect:
-- **Execute Query 9** to get Graph MCP caller attribution — User vs SPN vs Agent breakdown
-- Agent Identity inventory via Graph API — `GET /servicePrincipals?$filter=servicePrincipalType eq 'Agent'` (via Graph MCP `microsoft_graph_suggest_queries` → `microsoft_graph_get`)
-- **Execute Query 10** to get Agent Identity sign-in events from `AADServicePrincipalSignInLogs` where applicable
-- **Execute Query 11** to get Agent Identity CRUD operations from `AuditLogs` — creation, modification, deletion of agent identities
+- **Execute Query 9** to get Graph MCP caller attribution — User vs SPN breakdown
+- **Execute Query 15** to get top MCP users ranked by cross-server breadth — identifies which users span the most MCP servers and their total call volume
 
-**Note:** This phase depends on Entra Agent ID (preview) being available in the tenant. If no agent identities exist, report: "✅ No Entra Agent Identities detected in tenant — all MCP callers are standard users or service principals." and skip Queries 10-11.
+**Note:** Query 15 joins user activity across all 4 MCP channels (Graph MCP, Triage MCP, Data Lake MCP, Azure CLI/MCP) and resolves UserIds to UPNs via SigninLogs. Data Lake MCP attribution uses `InterfaceNotProvided` proxy signal when RecordType 403 is unavailable.
 
 ### Phase 7: Score Computation & Report Generation
 
 1. **Compute per-dimension scores** from Phase 1-6 data:
-   - **User Diversity:** Count distinct users AND distinct Agent Identities across all MCP channels
+   - **User Diversity:** Count distinct users across all MCP channels (use Query 15 cross-server results)
    - **Endpoint Sensitivity:** % of Graph MCP calls to sensitive patterns (Phase 1 Query 2 `IsSensitive` column)
    - **Error Rate:** % of non-2xx responses across all MCP channels
    - **Volume Anomaly:** Compare most recent day vs rolling average (Phase 1 Query 1 daily data)
    - **Off-Hours Activity:** % of MCP calls outside 08:00-18:00 (Phase 1 Query 2 `OffHoursCalls` column)
 2. **Sum dimension scores** for composite MCP Usage Score
-3. **Include Agent Identity attribution** in report if any agent callers detected (Phase 6)
+3. **Include Top MCP Users table** in report (Phase 6 — Query 15 cross-server results)
 4. **Generate security assessment** with emoji-coded findings
 5. **Render output** in the user's selected mode
 6. **Validate report completeness** — after composing the report, run the [Report Completeness Checklist](#report-completeness-checklist) below. Cross-check every required section against the template before saving/presenting. Fix any missing sections before finalizing.
@@ -943,11 +838,11 @@ LAQueryLogs
 | order by QueryCount desc
 ```
 
-### Query 9: Graph MCP — Caller Attribution (User vs SPN vs Agent)
+### Query 9: Graph MCP — Caller Attribution (User vs SPN)
 
 ```kql
-// Attribute Graph MCP calls to User, Service Principal, or Agent Identity
-// Key: UserId populated = delegated (user), ServicePrincipalId populated = app-only (SPN/Agent)
+// Attribute Graph MCP calls to User, Service Principal, or SPN subtype
+// Key: UserId populated = delegated (user), ServicePrincipalId populated = app-only (SPN)
 // ClientAuthMethod: 0 = public client (user), 1 = client secret (SPN), 2 = certificate (SPN)
 MicrosoftGraphActivityLogs
 | where TimeGenerated >= ago(30d)
@@ -985,77 +880,7 @@ MicrosoftGraphActivityLogs
 
 Use `microsoft_graph_suggest_queries` → `microsoft_graph_get` for the Graph API calls. Query multiple SPNs in one call: `/beta/servicePrincipals?$count=true&$filter=id in ('id1','id2')&$select=id,appId,displayName,servicePrincipalType,tags`.
 
-### Query 10: Agent Identity Sign-In Events
-
-```kql
-// Agent Identity sign-ins — look for Copilot Studio agent SPNs
-// Field-tested: Copilot Studio agents sign in to "Bot Framework" from Azure internal IPv6 (fd00:34f2:*)
-// Also check for Graph, Sentinel resources in case agents expand scope
-// Cross-reference ServicePrincipalId values from Query 11 AuditLogs results
-// Substitute <AGENT_SPN_IDS> with confirmed agent SPN IDs (or remove filter for broad discovery)
-AADServicePrincipalSignInLogs
-| where TimeGenerated >= ago(30d)
-// Uncomment the next line if you have confirmed agent SPN IDs from Query 11 / Graph API:
-// | where ServicePrincipalId in (<AGENT_SPN_IDS>)
-| where ResourceDisplayName has_any ("Graph", "Sentinel", "Microsoft Graph", "Bot Framework")
-| summarize
-    SignInCount = count(),
-    SuccessCount = countif(ResultType == "0" or ResultType == 0),
-    FailCount = countif(ResultType != "0" and ResultType != 0),
-    DistinctResources = dcount(ResourceDisplayName),
-    Resources = make_set(ResourceDisplayName, 10),
-    IPs = make_set(IPAddress, 5),
-    Locations = make_set(Location, 5),
-    FirstSeen = min(TimeGenerated),
-    LastSeen = max(TimeGenerated)
-    by ServicePrincipalName, ServicePrincipalId, AppId
-| order by SignInCount desc
-```
-
-**Telemetry patterns for Copilot Studio agents (field-tested):**
-- **Resource:** `Bot Framework` (NOT `Microsoft Graph` — agents talk to Bot Framework runtime)
-- **IP addresses:** Azure internal IPv6 (`fd00:34f2:*`) — these are Azure infrastructure IPs, not user IPs
-- **Sign-in volume:** Low (single-digit sign-ins typical for idle agents)
-- **Correlation:** Match `ServicePrincipalId` here with `TargetId` from Query 11 AuditLogs to confirm the same agent
-
-### Query 11: Agent Identity CRUD Operations in AuditLogs
-
-```kql
-// Track creation, modification, and deletion of Agent Identities
-// These operations indicate agent lifecycle management in the tenant
-// Key insight: Copilot Studio agents are created by "Power Virtual Agents Service"
-// and have display names like "Agent (Microsoft Copilot Studio)" or "<Name> (Microsoft Copilot Studio)"
-AuditLogs
-| where TimeGenerated >= ago(30d)
-| where OperationName has_any ("agent", "Agent")
-    or Category == "AgentIdentity"
-    or (OperationName has_any ("service principal") and (
-        tostring(TargetResources) has "agent"
-        or tostring(TargetResources) has "Copilot Studio"
-        or tostring(InitiatedBy) has "Power Virtual Agents"
-    ))
-| project TimeGenerated, OperationName, Result,
-    InitiatedBy = coalesce(
-        tostring(parse_json(tostring(InitiatedBy)).user.userPrincipalName),
-        tostring(parse_json(tostring(InitiatedBy)).app.displayName)),
-    TargetName = tostring(parse_json(tostring(parse_json(tostring(TargetResources))[0])).displayName),
-    TargetId = tostring(parse_json(tostring(parse_json(tostring(TargetResources))[0])).id),
-    TargetType = tostring(parse_json(tostring(parse_json(tostring(TargetResources))[0])).type)
-| extend IsAgenticSPN = iff(
-    InitiatedBy == "Power Virtual Agents Service"
-    or TargetName has "Copilot Studio"
-    or TargetName has "AgenticApp", true, false)
-| order by TimeGenerated desc
-| take 50
-```
-
-**Interpreting results:**
-- `InitiatedBy` = `Power Virtual Agents Service` → Copilot Studio created/modified this agent SPN automatically
-- `InitiatedBy` = `user@domain.com` → Human manually created/modified this SPN (may or may not be an agent)
-- `OperationName` = `Hard delete service principal` shortly after `Add service principal` → Testing/experimentation pattern
-- Multiple operations (`Add SPN` → `Add owner` → `Update SPN`) within seconds → Copilot Studio automated provisioning sequence
-
-### Query 12: Data Lake MCP — Access Pattern Summary
+### Query 10: Data Lake MCP — Access Pattern Summary
 
 **Note:** Consolidates former Q20 (Tool Usage Summary) + Q24 (MCP vs Direct KQL Delineation) into a single query.
 **Tool:** `RunAdvancedHuntingQuery` (uses `Timestamp` for CloudAppEvents).  
@@ -1112,7 +937,7 @@ CloudAppEvents
 | order by TotalCalls desc
 ```
 
-**Post-processing for Query 12:**
+**Post-processing for Query 10:**
 - If `MCP Server-Driven` (RecordType 403) has results → use it directly as the definitive MCP count.
 - If `MCP Server-Driven` returns 0 rows but `MCP-Driven (Probable)` has results → report the probable count with the audit gap caveat. Cross-reference users with Q4/Q6 SigninLogs to validate.
 - `Portal (Data Lake Explorer)` = `msglakeexplorer@msec-msg` interface, `Scheduled Jobs` = `msgjobmanagement@msec-msg`.
@@ -1125,10 +950,10 @@ CloudAppEvents
 | **Graph API** | `MicrosoftGraphActivityLogs` | Graph MCP (`e8c77dc2`) | — |
 | **Azure MCP** | `SigninLogs`, `AADNonInteractiveUserSignInLogs`, `LAQueryLogs` | Azure MCP Server (`04b07795`, empty `RequestClientApp`, query text `\n| limit N` suffix) | Azure CLI (same AppId, same empty `RequestClientApp`) |
 
-### Query 13: Data Lake MCP — Interface Breakdown
+### Query 11: Data Lake MCP — Interface Breakdown
 
 **Tool:** `RunAdvancedHuntingQuery` (uses `Timestamp` for CloudAppEvents).  
-**⚠️ Pitfall-aware:** Uses `contains`/`parse_json(tostring())` pattern — see Query 12 pitfall notes. Uses `todouble(ExecutionDuration)` — see [Data Lake MCP ExecutionDuration Format](#data-lake-mcp-executionduration-format). When RecordType 403 is present, groups by ToolName; when absent, falls back to Interface field.
+**⚠️ Pitfall-aware:** Uses `contains`/`parse_json(tostring())` pattern — see Query 10 pitfall notes. Uses `todouble(ExecutionDuration)` — see [Data Lake MCP ExecutionDuration Format](#data-lake-mcp-executionduration-format). When RecordType 403 is present, groups by ToolName; when absent, falls back to Interface field.
 
 ```kql
 // Breakdown of Data Lake access by Interface — identifies MCP vs Portal vs Jobs
@@ -1175,10 +1000,10 @@ CloudAppEvents
 | order by CallCount desc
 ```
 
-### Query 14: Data Lake MCP — Error Analysis
+### Query 12: Data Lake MCP — Error Analysis
 
 **Tool:** `RunAdvancedHuntingQuery` (uses `Timestamp` for CloudAppEvents).  
-**⚠️ Pitfall-aware:** Uses `contains`/`parse_json(tostring())` pattern — see Query 12 pitfall notes. Now groups errors by both AccessPattern (MCP vs Portal vs Jobs) and ErrorCategory for richer diagnostics.
+**⚠️ Pitfall-aware:** Uses `contains`/`parse_json(tostring())` pattern — see Query 10 pitfall notes. Now groups errors by both AccessPattern (MCP vs Portal vs Jobs) and ErrorCategory for richer diagnostics.
 
 ```kql
 // Analyze failed Data Lake queries — identify schema errors, permission issues, etc.
@@ -1225,7 +1050,7 @@ CloudAppEvents
 | order by AccessPattern asc, ErrorCount desc
 ```
 
-### Query 15: Azure MCP Server — Authentication Events (SigninLogs)
+### Query 13: Azure MCP Server — Authentication Events (SigninLogs)
 
 **Tool:** `mcp_sentinel-data_query_lake` (90d lookback exceeds AH 30d limit).  
 **⚠️ Pitfall-aware:** Uses `parse_json(Status)`/`parse_json(DeviceDetail)` wrappers — see [SigninLogs Status Field Needs parse_json()](#signinlogs-status-field-needs-parse_json-in-data-lake). Uses `extend SignInType` to avoid `Type` pseudo-column — see [Type Column Unavailable in Data Lake Union Contexts](#type-column-unavailable-in-data-lake-union-contexts).
@@ -1239,7 +1064,7 @@ CloudAppEvents
 //
 // ⚠️ SHARED APPID: 04b07795 is the Azure CLI AppId — shared with manual 'az' CLI usage.
 // There is NO unique sign-in fingerprint for Azure MCP Server vs manual Azure CLI.
-// This query returns ALL Azure CLI sign-ins. Correlate with LAQueryLogs (Query 16)
+// This query returns ALL Azure CLI sign-ins. Correlate with LAQueryLogs (Query 14)
 // for query-level attribution via the '\n| limit N' text pattern.
 //
 // NOTE: Sign-in events represent TOKEN ACQUISITIONS, not individual API calls.
@@ -1281,7 +1106,7 @@ union signinlogs_interactive, signinlogs_noninteractive
 | order by TimeGenerated desc
 ```
 
-### Query 16: Azure MCP Server — Workspace Queries (LAQueryLogs)
+### Query 14: Azure MCP Server — Workspace Queries (LAQueryLogs)
 
 **Tool:** `mcp_sentinel-data_query_lake` (90d lookback exceeds AH 30d limit).
 
@@ -1318,6 +1143,63 @@ LAQueryLogs
 ```
 
 > **Post-processing:** Rows with `HasLimitSuffix = true` are highly likely Azure MCP Server queries (the `monitor_workspace_log_query` command always appends `| limit N`). Rows without the suffix may be manual Azure CLI or other tools using the same credential.
+
+### Query 15: Top MCP Users — Cross-Server Breadth
+
+**Tool:** `RunAdvancedHuntingQuery` (7-day lookback default, all tables on Analytics tier).
+**Purpose:** Identifies users with the broadest MCP footprint — ranking by how many distinct MCP server types they use and their total call volume across all channels. Feeds the **Top MCP Users** report section and SVG dashboard widget.
+
+```kql
+let lookback = 7d;
+let graph_mcp = MicrosoftGraphActivityLogs
+| where TimeGenerated > ago(lookback)
+| where AppId == "e8c77dc2-69b3-43f4-bc51-3213c9d915b4"
+| where isnotempty(UserId)
+| summarize Calls = count() by UserId
+| project UserId, Server = "Graph MCP", Calls;
+let triage_mcp = MicrosoftGraphActivityLogs
+| where TimeGenerated > ago(lookback)
+| where AppId == "7b7b3966-1961-47b5-b080-43ca5482e21c"
+| where isnotempty(UserId)
+| summarize Calls = count() by UserId
+| project UserId, Server = "Triage MCP", Calls;
+let datalake_mcp = CloudAppEvents
+| where Timestamp > ago(lookback)
+| where ActionType contains "Sentinel" or ActionType contains "KQL"
+| where tostring(RawEventData) has "InterfaceNotProvided"
+| where isnotempty(AccountObjectId)
+| summarize Calls = count() by UserId = AccountObjectId
+| project UserId, Server = "Data Lake MCP", Calls;
+let azure_mcp = union SigninLogs, AADNonInteractiveUserSignInLogs
+| where TimeGenerated > ago(lookback)
+| where AppId == "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
+| where isnotempty(UserId)
+| summarize Calls = count() by UserId
+| project UserId, Server = "Azure CLI/MCP", Calls;
+let upn_map = union SigninLogs, AADNonInteractiveUserSignInLogs
+| where TimeGenerated > ago(lookback)
+| where isnotempty(UserPrincipalName)
+| summarize arg_max(TimeGenerated, UserPrincipalName) by UserId
+| project UserId, UPN = UserPrincipalName;
+union graph_mcp, triage_mcp, datalake_mcp, azure_mcp
+| summarize Servers = make_set(Server), ServerCount = dcount(Server), TotalCalls = sum(Calls) by UserId
+| join kind=leftouter upn_map on UserId
+| project UPN = coalesce(UPN, UserId), ServerCount, Servers, TotalCalls
+| sort by ServerCount desc, TotalCalls desc
+| take 25
+```
+
+**⚠️ Pitfall-aware:**
+- **Data Lake MCP leg:** Uses `ActionType contains` (not `has`) per the [CamelCase pitfall](#cloudappevents-camelcase-matching-actiontype-and-operation). Uses `InterfaceNotProvided` proxy signal when RecordType 403 is unavailable (see [Phase 3 Known Limitation](#phase-3-sentinel-data-lake-mcp-analysis)).
+- **Azure CLI/MCP leg:** Uses shared AppId `04b07795` — includes both Azure MCP Server and manual `az` CLI sign-ins. Cannot distinguish at this level.
+- **UPN resolution:** Joins with SigninLogs to resolve `UserId` GUIDs to human-readable UPNs. Users with no recent sign-ins will show their GUID instead.
+- **CloudAppEvents timestamp:** Uses `Timestamp` (not `TimeGenerated`) since this runs via Advanced Hunting.
+- **AADNonInteractiveUserSignInLogs tier:** If this table is on Data Lake/Basic tier, the `union SigninLogs, AADNonInteractiveUserSignInLogs` legs may fail in AH. Fall back to `mcp_sentinel-data_query_lake` if needed (switch `Timestamp` → `TimeGenerated` for the CloudAppEvents leg).
+
+**Post-processing:**
+- Render as a ranked table in the report: `| Rank | User (UPN) | Servers Used | MCP Servers | Total Calls |`
+- Users spanning 3+ servers represent the broadest MCP adoption — highlight them.
+- Cross-reference top users with the sensitive endpoint data from Q2 to flag users with both breadth AND sensitive access.
 
 ---
 
@@ -1368,10 +1250,10 @@ The inline report MUST include these sections in order:
    - **Data Lake Tier** (CloudAppEvents): MCP-driven vs Direct KQL breakdown
    - Combined MCP proportion across both tiers
    - Pareto analysis of query sources
-9. **Agent Identity Attribution**
-   - Caller type breakdown (Human / SPN / Agent Identity / Agent User)
-   - Agent Identity inventory (from AuditLogs + Graph API `/beta` tags) — if no agents exist: "✅ No Entra Agent Identities detected in tenant."
-   - Agent lifecycle timeline (creation, modification, deletion events)
+9. **Top MCP Users (Cross-Server Breadth)**
+   - Ranked table of users by number of MCP servers used and total call volume
+   - Cross-server correlation (Graph MCP, Triage MCP, Data Lake MCP, Azure CLI/MCP)
+   - UPN resolution from UserIds
 10. **MCP Usage Score** — Per-dimension breakdown with scoring rationale
 11. **Security Assessment** — Emoji-coded findings table with evidence citations
 12. **Recommendations** — Prioritized action items based on findings
@@ -1390,13 +1272,14 @@ The inline report MUST include these sections in order:
 | 5 | Sentinel Triage MCP | API calls table | Q5 | ☐ |
 | 5 | Sentinel Triage MCP | Authentication events | Q6 | ☐ |
 | 6 | Data Lake MCP | Daily Activity Trend (ASCII bar chart) | Q1 → `Server = "Data Lake MCP"` | ☐ |
-| 6 | Data Lake MCP | MCP vs Direct KQL delineation | Q12 | ☐ |
-| 6 | Data Lake MCP | Tool breakdown table | Q13 | ☐ |
-| 6 | Data Lake MCP | Error analysis | Q14 | ☐ |
+| 6 | Data Lake MCP | MCP vs Direct KQL delineation | Q10 | ☐ |
+| 6 | Data Lake MCP | Tool breakdown table | Q11 | ☐ |
+| 6 | Data Lake MCP | Error analysis | Q12 | ☐ |
 | 7 | Azure MCP Server | Daily Auth Trend (ASCII bar chart) | Q1 → `Server = "Azure MCP/CLI"` | ☐ |
-| 7 | Azure MCP Server | Authentication events | Q15 | ☐ |
-| 7 | Azure MCP Server | Workspace queries (LAQueryLogs) | Q16 | ☐ |
-| 7 | Azure MCP Server | AzureActivity write operations | Q17 (or explicit "none found") | ☐ |
+| 7 | Azure MCP Server | Authentication events | Q13 | ☐ |
+| 7 | Azure MCP Server | Workspace queries (LAQueryLogs) | Q14 | ☐ |
+| 7 | Azure MCP Server | AzureActivity write operations | (ad-hoc or explicit "none found") | ☐ |
+| 9 | Top MCP Users | Cross-server user breadth table | Q15 | ☐ |
 
 If any checkbox cannot be checked, either the data was missing (state why — e.g., "Q1 returned 0 rows for this server") or the section was accidentally omitted. **Do not finalize the report with unchecked boxes unless the data genuinely does not exist.**
 
@@ -1530,7 +1413,6 @@ When outputting to markdown file, include everything from the inline format PLUS
 |-------------|-------------|------:|------:|-------------:|
 | 👤 User (Delegated) | ... | ... | ... | ...% |
 | 🤖 Service Principal | ... | ... | ... | ...% |
-| 🤖🔵 Agent Identity | ... | ... | ... | ...% |
 
 ---
 
@@ -1644,32 +1526,16 @@ MCP queries represent X% of combined query volume:
 
 ---
 
-## Agent Identity Attribution
+## Top MCP Users (Cross-Server Breadth)
 
-### Caller Type Breakdown (Graph MCP)
-| Caller Type | Distinct Callers | Total Calls | % of Graph MCP |
-|-------------|-----------------|-------------|----------------|
-| 👤 Human User | ... | ... | ...% |
-| 🤖 Service Principal | ... | ... | ...% |
-| 🤖🔵 Agent Identity (SPN subtype) | ... | ... | ...% |
-| 👤🔵 Agent User | ... | ... | ...% |
+### User Ranking by MCP Server Breadth (Query 15)
+| Rank | User (UPN) | Servers Used | MCP Servers | Total Calls |
+|------|-----------|:------------:|-------------|------------:|
+| 1 | ... | N | Graph MCP, Triage MCP, ... | X,XXX |
+| 2 | ... | N | ... | X,XXX |
+| ... | ... | ... | ... | ... |
 
-### Agent Identity Inventory (from AuditLogs + Graph API `/beta` tags)
-| Agent Name | SPN ID | AppId | Tags | Created By | Created | Status | Sign-In Resource |
-|------------|--------|-------|------|-----------|---------|--------|------------------|
-| ... | ... | ... | `AgenticApp`, `AgentCreatedBy:CopilotStudio` | Power Virtual Agents Service | YYYY-MM-DD | Active/Deleted | Bot Framework |
-
-### Agent Lifecycle Timeline
-
-    <Date> <Time>  ── <Agent Name> ── <Operation> (by <InitiatedBy>)
-                       └── <Context notes>
-
-> **Detection Method (Field-Tested):**
-> 1. `AuditLogs` → filter for `OperationName has "agent"` or `InitiatedBy = "Power Virtual Agents Service"` or `TargetResources has "Copilot Studio"`
-> 2. Graph API → `GET /beta/servicePrincipals?$filter=id in (...)&$select=id,appId,displayName,servicePrincipalType,tags`
-> 3. **Primary classifier:** `/beta` `tags` array — look for `AgenticApp`, `AIAgentBuilder`, `AgentCreatedBy:CopilotStudio`
-> 4. **DO NOT** rely on `servicePrincipalType` (still shows `"Application"` for agents) or display name (unreliable)
-> 5. If no Agent Identities exist in tenant: "✅ No Entra Agent Identities detected in this tenant."
+> **Interpretation:** Users spanning 3+ MCP servers represent the broadest AI tool adoption. Cross-reference with sensitive endpoint data (§4) to identify users combining breadth with privileged access.
 
 ---
 
@@ -1728,7 +1594,7 @@ This skill provides **on-demand visibility** (Phases 1-7 above). For **continuou
 
 | Tier | Capability | Implementation |
 |------|-----------|----------------|
-| **1. Visibility** (current skill) | On-demand MCP usage reports via Copilot chat | This SKILL.md — Phases 1-7, Queries 1-16 |
+| **1. Visibility** (current skill) | On-demand MCP usage reports via Copilot chat | This SKILL.md — Phases 1-7, Queries 1-15 |
 | **2. Baselining** | 14-day behavioral baselines per user per MCP server | KQL Jobs 1-8 build baselines automatically |
 | **3. Alerting** | Automated anomaly detection → Sentinel incidents | KQL Jobs promote to `_KQL_CL` tables → Analytics Rules fire |
 | **4. Enforcement** | Real-time guardrails, scope limits (future) | Not yet available — requires MCP protocol-level controls |
@@ -1771,14 +1637,6 @@ For full query definitions, deployment checklist, and companion analytics rule t
 ### `project ... as` Keyword Fails in Advanced Hunting
 **Problem:** The `as` keyword for column aliasing inside `project` (e.g., `tostring(parse_json(Status).errorCode) as ErrorCode`) fails in Advanced Hunting with `Query could not be parsed at 'as'`. While `as` is valid KQL in Log Analytics / Data Lake, the AH parser rejects it inside `project` statements.  
 **Solution:** Always use `=` assignment syntax instead: `ErrorCode = tostring(parse_json(Status).errorCode)`. This works in both AH and Data Lake. All queries in this skill have been updated to use `=` syntax. When writing new queries, never use `as` for column aliasing in `project` — reserve `as` for tabular expression naming (`let T = ... | as T`).
-
-### Agent Identity vs Standard SPN Ambiguity
-**Problem:** `MicrosoftGraphActivityLogs` does NOT yet distinguish Agent Identities from standard SPNs. Both appear in the `ServicePrincipalId` field with no subtype indicator. Agent Users appear in `UserId` indistinguishably from human users. Additionally, `servicePrincipalType` still returns `"Application"` even for confirmed Copilot Studio agents — the `"Agent"` subtype is not yet populated (as of Feb 2026). This is a [documented known limitation](https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/preview-known-issues#monitoring-and-logs) of the Entra Agent ID preview.  
-**Solution (Field-Tested):** Use the **`/beta` `tags` property** as the primary detection method. Query: `GET /beta/servicePrincipals/{id}?$select=id,appId,displayName,servicePrincipalType,tags`. Confirmed Copilot Studio agents will have tags including `AgenticApp`, `AIAgentBuilder`, `AgentCreatedBy:CopilotStudio`, and `AgenticInstance`. Standard app registrations (even those with "Agent" in the display name) will NOT have these tags — they may have tags like `GitCreatedApp` or `disableLegacyUserImpersonation*` instead. For `UserId` values, check against the tenant's agent user inventory. If no Agent Identities exist in the tenant, note this and skip agent-specific analysis.
-
-### Agent Display Name Unreliable for Classification
-**Problem:** An SPN with "Agent" in its display name is NOT necessarily an Agent Identity. Example from live testing: "Contoso Agent Tools" is a standard app registration (`servicePrincipalType: Application`, tags: `GitCreatedApp`) — NOT a Copilot Studio agent despite the name. Conversely, a generic name like "Agent (Microsoft Copilot Studio)" IS a real agent.  
-**Solution:** NEVER classify SPNs as agents based on display name alone. Always check the `/beta` `tags` array for agentic indicators (`AgenticApp`, `AgentCreatedBy:CopilotStudio`). In AuditLogs, check `InitiatedBy` — agents created by `Power Virtual Agents Service` are Copilot Studio agents, while those created by a `user@domain.com` are manual app registrations.
 
 ### Azure MCP Server Detection (🔄 Updated Feb 2026)
 **Problem:** Azure MCP Server uses `DefaultAzureCredential` and the credential chain now resolves to **Azure CLI** (AppId `04b07795-8ddb-461a-bbee-02f9e1bf7b46`), NOT `AzurePowerShellCredential` (`1950a258`) as previously documented. In LAQueryLogs, `RequestClientApp` is **empty** (not `csharpsdk,LogAnalyticsPSClient`). The previously documented fingerprint (`1950a258` + `csharpsdk,LogAnalyticsPSClient`) appeared only once in 30-day lookback and is obsolete. ARM read operations (the majority of MCP calls) do not appear in `AzureActivity`.
@@ -1865,7 +1723,7 @@ For full query definitions, deployment checklist, and companion analytics rule t
 
 ### `Type` Column Unavailable in Data Lake Union Contexts
 **Problem:** The `Type` pseudo-column (table name) is **NOT resolvable** in `union` queries executed via Sentinel Data Lake. Using `summarize by Type` in a `union SigninLogs, AADNonInteractiveUserSignInLogs` query fails with `SemanticError: Failed to resolve scalar expression named 'Type'`.  
-**Solution:** When you need to distinguish source tables in a union, add `| extend TableName = "SigninLogs"` (or `"AADNonInteractive"`) within each union leg before the union operator. Then `summarize by TableName`. This is already handled in Query 15 via the `SignInType` field pattern (`extend SignInType = "Interactive"` / `"Non-Interactive"`), but ad-hoc summary variants must use the `extend` approach — never `Type`.
+**Solution:** When you need to distinguish source tables in a union, add `| extend TableName = "SigninLogs"` (or `"AADNonInteractive"`) within each union leg before the union operator. Then `summarize by TableName`. This is already handled in Query 13 via the `SignInType` field pattern (`extend SignInType = "Interactive"` / `"Non-Interactive"`), but ad-hoc summary variants must use the `extend` approach — never `Type`.
 
 ### Non-Interactive Sign-In Noise
 **Problem:** `AADNonInteractiveUserSignInLogs` may contain Logic Apps connector activity (`de8c33bb`) that looks like user activity but is automated.  
@@ -1882,10 +1740,6 @@ For full query definitions, deployment checklist, and companion analytics rule t
 ### Multi-Tenant Token Confusion
 **Problem:** Azure MCP Server uses `DefaultAzureCredential` and may authenticate against the wrong tenant if multiple credentials are cached, causing queries to fail or return data from an unexpected tenant.  
 **Solution:** Read `config.json` for the `azure_mcp.tenant` parameter. When making Azure MCP Server calls, always pass the `tenant` parameter explicitly. Note this risk in the report.
-
-### Agent User UPNs Masquerading as Human Users
-**Problem:** Agent Users are assigned UPNs and appear in `UserId` fields identically to human users. Without checking the account type, an agent user's MCP activity would be reported as human activity.  
-**Solution:** When the MCP Usage Score flags unexpected user diversity or new users, cross-reference the `UserId` with Entra to check if the user object is an Agent User (`userType` and account metadata). Agent Users created by Copilot Studio or Agent Identity Blueprints will have specific metadata distinguishing them from workforce accounts.
 
 ### Rate Limiting Not Visible in Logs
 **Problem:** Graph MCP Server is capped at 100 calls/min/user. If throttled, calls may not appear in logs (no log entry = no visibility).  
@@ -1909,11 +1763,6 @@ For full query definitions, deployment checklist, and companion analytics rule t
 | `LAQueryLogs` table not found | Diagnostic settings not configured on LA workspace. Report gap, skip governance analysis. |
 | `SentinelAudit` table not found | Sentinel health monitoring not enabled. Report gap, skip config change analysis. |
 | `AzureActivity` returns 0 results | No ARM operations in the time range, or no administrative actions by the specified user. |
-| Agent Identity query returns empty | Entra Agent ID not enabled or no agents registered. Report gap as "✅ No Agent Identities detected", skip Queries 10-11. |
-| `AADServicePrincipalSignInLogs` missing agent subtype | Agent ID preview may not be active. Agent SPNs will appear as regular SPNs. Note limitation. |
-| SPN `servicePrincipalType` shows `Application` for known agents | Expected behavior as of Feb 2026. Copilot Studio agents still report as `Application`. Use `/beta` `tags` array instead (`AgenticApp`, `AgentCreatedBy:CopilotStudio`). |
-| Agent sign-ins show Azure internal IPv6 (`fd00:*`) | Expected for Copilot Studio agents — they authenticate from Azure infrastructure. Not a concern. |
-| Agent SPN hard-deleted shortly after creation | Testing/experimentation pattern. AuditLogs show `Add service principal` → `Hard delete service principal` within minutes. Report duration and flag if unexpected. |
 | SigninLogs returns 0 for Sentinel Platform Services | No one authenticated to Sentinel MCP in the time range. Report as "✅ No Sentinel MCP authentication events detected." |
 | `CloudAppEvents` table not found | Purview unified audit not available (requires E5 license). Report gap: "⚠️ CloudAppEvents not available — cannot monitor Data Lake MCP usage. Requires Microsoft 365 E5 or Purview audit." Skip Phase 3 (Data Lake MCP). |
 | CloudAppEvents returns 0 for Sentinel operations | No Data Lake MCP or Direct KQL activity in the time range. Report as "✅ No Sentinel Data Lake activity detected in CloudAppEvents." |
@@ -1949,11 +1798,8 @@ Before presenting results, verify:
 - [ ] AppId cross-reference table is included for any unknown AppIds discovered
 - [ ] The MCP Usage Score calculation is transparent with per-dimension evidence
 - [ ] All ASCII visualizations are wrapped in code fences for markdown compatibility
-- [ ] Agent Identity detection was attempted (Query 9 for caller attribution, Query 11 for CRUD lifecycle, Graph API `/beta` tags for classification)
-- [ ] Graph API cross-reference used `/beta` endpoint with `tags` property — NOT `servicePrincipalType` alone (which is unreliable)
-- [ ] Agent classification based on tags (`AgenticApp`, `AgentCreatedBy:CopilotStudio`), NOT display name
-- [ ] If Agent Identities found: reported separately from human users and standard SPNs, with lifecycle timeline
-- [ ] If no Agent Identities: confirmed with "✅ No Entra Agent Identities detected in tenant"
+- [ ] Top MCP Users table (Q15) included in report with cross-server breadth ranking
+- [ ] If no Agent Identities are needed: refer user to `ai-agent-posture` skill for comprehensive agent audit
 
 ---
 
@@ -1964,12 +1810,12 @@ For complete MCP server monitoring, ensure these data sources are enabled:
 | Data Source | Enabling Documentation | Required For |
 |-------------|----------------------|--------------|
 | **Microsoft Graph activity logs** | [Enable Graph activity logs](https://learn.microsoft.com/en-us/graph/microsoft-graph-activity-logs-overview) | Graph MCP analysis (Queries 1-2, 5, 9) |
-| **CloudAppEvents (Purview unified audit)** | Requires M365 E5 license; enable [Sentinel Data Lake auditing](https://learn.microsoft.com/en-us/azure/sentinel/datalake/auditing-lake-activities) | Data Lake MCP analysis (Queries 12-14) |
+| **CloudAppEvents (Purview unified audit)** | Requires M365 E5 license; enable [Sentinel Data Lake auditing](https://learn.microsoft.com/en-us/azure/sentinel/datalake/auditing-lake-activities) | Data Lake MCP analysis (Queries 10-12) |
 | **Sentinel auditing and health monitoring** | [Enable Sentinel monitoring](https://learn.microsoft.com/en-us/azure/sentinel/enable-monitoring) | Config change detection (ad-hoc SentinelAudit queries) |
-| **LAQueryLogs (diagnostic settings)** | Configure diagnostic settings on LA workspace | Workspace governance (Queries 7, 8, 16) |
+| **LAQueryLogs (diagnostic settings)** | Configure diagnostic settings on LA workspace | Workspace governance (Queries 7, 8, 14) |
 | **AzureActivity** | Enabled by default for ARM operations | Azure MCP analysis (ad-hoc ARM queries) |
-| **SigninLogs** | Entra ID diagnostic settings | Sentinel MCP auth events (Queries 3-4, 6, 15) |
-| **Purview audit logs** | Included with E5 license | CloudAppEvents ingestion — required for Data Lake MCP monitoring (Queries 12-14). RecordType 403 (AI Tool) and 379 (KQL) |
+| **SigninLogs** | Entra ID diagnostic settings | Sentinel MCP auth events (Queries 3-4, 6, 13) |
+| **Purview audit logs** | Included with E5 license | CloudAppEvents ingestion — required for Data Lake MCP monitoring (Queries 10-12). RecordType 403 (AI Tool) and 379 (KQL) |
 
 If any prerequisite is not met, the skill will report the gap and skip the affected analysis sections.
 
@@ -1988,7 +1834,7 @@ If any prerequisite is not met, the skill will report the gap and skip the affec
 - **Power BI MCP:** Remote endpoint at `https://api.fabric.microsoft.com/v1/mcp/powerbi`, Modeling at [microsoft/powerbi-modeling-mcp](https://github.com/microsoft/powerbi-modeling-mcp)
 - **Fabric RTI MCP:** [Fabric RTI MCP overview](https://learn.microsoft.com/en-us/fabric/real-time-intelligence/mcp-overview) | [GitHub](https://github.com/microsoft/fabric-rti-mcp/)
 - **Playwright MCP:** [GitHub](https://github.com/microsoft/playwright-mcp) — Browser automation MCP (26.9k ⭐, local only)
-- **Entra Agent ID docs:** [What are agent identities](https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/what-is-agent-id) | [Agent sign-in logs](https://learn.microsoft.com/en-us/entra/agent-id/identity-professional/sign-in-audit-logs-agents) | [Agent OAuth protocols](https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/agent-oauth-protocols) | [Known issues](https://learn.microsoft.com/en-us/entra/agent-id/identity-platform/preview-known-issues)
+- **AI Agent Posture:** `.github/skills/ai-agent-posture/SKILL.md` — Comprehensive Copilot Studio agent security audit (for Agent Identity analysis, use this skill instead)
 
 ---
 
