@@ -195,7 +195,7 @@ palette:
 ### Widget Type Reference — Component Library
 
 #### `title-banner`
-Full-width banner. Render the title large and centered (or left-aligned), subtitle fields on the same line separated by `" · "`. Optional accent underline.
+Full-width banner. Render the title large and **centered** horizontally on the canvas, subtitle fields centered below on the same line separated by `" · "`. Optional accent underline. Use `text-anchor="middle"` with x at canvas midpoint. If the manifest specifies `title_align: left`, left-align instead — but the default is always **center**.
 
 #### `kpi-card`
 Rounded rectangle (`rx="12"`). Show the value large and centered, label below in small text, optional unit suffix. Color the value with `highlight_color` if specified, otherwise `palette.primary`. No actual icon rendering needed — use a colored dot or small indicator instead.

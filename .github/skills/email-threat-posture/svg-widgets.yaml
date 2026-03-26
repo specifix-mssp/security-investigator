@@ -68,6 +68,7 @@ rows:
             - protected_mailboxes      # e.g. "298 Protected Mailboxes"
             - data_source              # "Microsoft Defender for Office 365"
         style:
+          title_align: center
           title_size: 22
           subtitle_size: 12
           accent_color: palette.primary

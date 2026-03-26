@@ -70,6 +70,7 @@ rows:
             - trust_type               # e.g. "Hybrid Joined · Non-Compliant"
             - investigation_period     # e.g. "2026-03-17 → 2026-03-26 (7 days)"
         style:
+          title_align: center
           title_size: 26
           subtitle_size: 13
           accent_color: palette.primary

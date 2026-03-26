@@ -78,6 +78,7 @@ rows:
             - analysis_period       # e.g. "2026-02-22 → 2026-03-24 (30 days)"
             - generation_date       # e.g. "2026-03-24"
         style:
+          title_align: center
           title_size: 26
           subtitle_size: 13
           accent_color: palette.primary
