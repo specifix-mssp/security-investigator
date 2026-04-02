@@ -2,8 +2,8 @@
 
 **Created:** 2026-03-31  
 **Platform:** Both  
-**Tables:** DeviceProcessEvents, DeviceFileEvents, DeviceNetworkEvents, DeviceEvents, DeviceRegistryEvents, DeviceCustomFileEvents, DeviceCustomScriptEvents, ASimDnsActivityLogs, DeviceTvmSoftwareInventory  
-**Keywords:** axios, npm, npm install, supply chain, plain-crypto-js, postinstall, setup.js, sfrclak, wt.exe, node.exe, node_modules, RAT, credential stealer, C2 beacon, PowerShell masquerade, VBScript dropper, cross-platform RAT, yarn, pnpm, npx, package-lock.json, yarn.lock, pnpm-lock.yaml  
+**Tables:** DeviceProcessEvents, DeviceFileEvents, DeviceNetworkEvents, DeviceEvents, DeviceRegistryEvents, DeviceCustomFileEvents, DeviceCustomScriptEvents, ASimDnsActivityLogs, DeviceTvmSoftwareInventory, CloudProcessEvents  
+**Keywords:** axios, npm, npm install, supply chain, plain-crypto-js, postinstall, setup.js, sfrclak, wt.exe, node.exe, node_modules, RAT, credential stealer, C2 beacon, PowerShell masquerade, VBScript dropper, cross-platform RAT, yarn, pnpm, npx, package-lock.json, yarn.lock, pnpm-lock.yaml, Sapphire Sleet, BlueNoroff, North Korea, DPRK  
 **MITRE:** T1195.002, T1059.007, T1059.001, T1059.005, T1027, T1036.005, T1547.001, T1041, T1071.001, T1082, T1005, T1552.001, T1070.004  
 **Timeframe:** Last 30 days (configurable)
 
@@ -11,9 +11,12 @@
 
 ## Overview
 
-This hunting campaign targets TTPs from the **axios npm supply chain compromise** disclosed March 31, 2026. The attacker compromised the npm maintainer account (`jasonsaayman`) of the widely-used `axios` HTTP client package (~300M weekly downloads) and published backdoored versions that delivered a cross-platform RAT via a malicious transitive dependency.
+This hunting campaign targets TTPs from the **axios npm supply chain compromise** disclosed March 31, 2026. **Microsoft Threat Intelligence has attributed this attack to Sapphire Sleet**, a North Korean (DPRK) state actor (also tracked as UNC1069, STARDUST CHOLLIMA, Alluring Pisces, BlueNoroff, CageyChameleon, CryptoCore). Sapphire Sleet focuses primarily on the finance sector — cryptocurrency, venture capital, and blockchain organizations — with the primary motivation of stealing cryptocurrency wallets to generate revenue.
+
+The attacker compromised the npm maintainer account (`jasonsaayman`) of the widely-used `axios` HTTP client package (~300M weekly downloads) and published backdoored versions that delivered a cross-platform RAT via a malicious transitive dependency.
 
 **Key intelligence sources:**
+- **[Microsoft Threat Intelligence — Mitigating the Axios npm supply chain compromise](https://www.microsoft.com/en-us/security/blog/2026/04/01/mitigating-the-axios-npm-supply-chain-compromise/)** (attribution, MDE detections, mitigation guidance)
 - **[Joe Desimone / Elastic Security — Technical Analysis Gist](https://gist.github.com/joe-desimone/36061dabd2bc2513705e0d083a9673e7)**
 - **[Huntress — Supply-Chain Compromise of axios npm Package](https://www.huntress.com/blog/supply-chain-compromise-axios-npm-package)**
 - **[Snyk — Axios npm Package Compromised: Supply Chain Attack Delivers Cross-Platform RAT](https://snyk.io/blog/axios-npm-package-compromised-supply-chain-attack-delivers-cross-platform/)**
@@ -24,13 +27,14 @@ This hunting campaign targets TTPs from the **axios npm supply chain compromise*
 |--------|--------|
 | **Target Package** | `axios` — promise-based HTTP client, ~300M weekly npm downloads |
 | **Compromised Maintainer** | `jasonsaayman` npm account (email changed from `jasonsaayman@gmail.com` → `ifstap@proton[.]me`) |
+| **Attribution** | **Sapphire Sleet** (North Korea) — Microsoft Threat Intelligence confirmed. Also tracked as UNC1069, STARDUST CHOLLIMA, Alluring Pisces, BlueNoroff, CageyChameleon, CryptoCore |
 | **Attack Method** | Published backdoored versions via npm CLI using compromised long-lived access token, bypassing OIDC Trusted Publishing |
 | **Malicious Versions** | `axios@1.14.1` (tagged `latest`), `axios@0.30.4` (tagged `legacy`) |
 | **Safe Versions** | `axios@1.14.0` (last legit 1.x — published via GitHub Actions OIDC with SLSA provenance), `axios@0.30.3` (last legit 0.x) |
 | **Malicious Dependency** | `plain-crypto-js@4.2.1` — purpose-built payload delivery vehicle (brand-new package, attacker-controlled). Pre-staged clean v4.2.0 published ~18 hours earlier by `nrwise@proton[.]me` to establish publishing history |
 | **Delivery Mechanism** | `plain-crypto-js` declares `"postinstall": "node setup.js"` — auto-executes on `npm install` |
 | **Payload** | Cross-platform RAT (macOS: compiled C++ Mach-O, Windows: PowerShell RAT, Linux: Python RAT) |
-| **C2 Domain** | `sfrclak[.]com:8000` (IP: `142.11.206.73`) |
+| **C2 Domain** | `sfrclak[.]com:8000` (IP: `142.11.206.73`) — hosted on **Hostwinds** VPS (known Sapphire Sleet infrastructure provider), domain registered via **NameCheap** |
 | **Campaign ID** | `6202033` (reversed = `3-30-2026`, date of attack) |
 | **Exposure Window** | 2026-03-31 00:21 UTC to ~03:29 UTC (~3 hours) |
 | **First Observed Infection** | 89 seconds after publish (macOS endpoint via Huntress EDR) |
@@ -88,21 +92,49 @@ This hunting campaign targets TTPs from the **axios npm supply chain compromise*
 | Unsecured Credentials: Credentials In Files | T1552.001 | npm tokens, SSH keys, API keys, .env files, cloud credentials at risk |
 | Indicator Removal: File Deletion | T1070.004 | `setup.js` self-deletion, `package.json` swap with clean stub, VBS/PS1 deletion |
 
+### Microsoft Defender Detection Names
+
+> Source: [Microsoft Security Blog](https://www.microsoft.com/en-us/security/blog/2026/04/01/mitigating-the-axios-npm-supply-chain-compromise/) — Use these for SecurityAlert correlation and confirming MDE coverage.
+
+| Platform | Detection Name | Type |
+|----------|---------------|------|
+| **Cross-platform** | `Trojan:Script/SuspObfusRAT.A` | Blocking |
+| **Cross-platform** | `TrojanDownloader:JS/Crosdomd.A` | Blocking |
+| **Cross-platform** | `Trojan:JS/AxioRAT.DA!MTB` | Blocking |
+| **Windows** | `TrojanDownloader:PowerShell/Powdow.VUE!MTB` | Blocking |
+| **Windows** | `Trojan:Win32/Malgent` | Blocking |
+| **Windows** | `TrojanDownloader:PowerShell/Crosdomd.B` | Blocking |
+| **Windows** | `TrojanDownloader:PowerShell/Crosdomd.A` | Blocking |
+| **Windows** | `TrojanDownloader:BAT/TalonStrike.F!dha` | Blocking |
+| **Windows** | `Backdoor:PowerShell/TalonStrike.B!dha` | Blocking |
+| **Windows** | `Behavior:Win32/PSMasquerade.A` | Behavioral |
+| **macOS** | `Trojan:MacOS/Multiverze!rfn` | Blocking |
+| **macOS** | `Backdoor:MacOS/TalonStrike.A!dha` | Blocking |
+| **macOS** | `Backdoor:MacOS/Crosdomd.A` | Blocking |
+| **macOS** | `Behavior:MacOS/SuspNukeSpedExec.B` | Blocking |
+| **macOS** | `Behavior:MacOS/SuspiciousActivityGen.AE` | Blocking |
+| **Linux** | `Trojan:Python/TalonStrike.C!dha` | Blocking |
+| **Linux** | `Backdoor:Python/TalonStrike.C!dha` | Blocking |
+| **Cloud** | Malicious Axios supply chain activity detected (Defender for Cloud) | Alert |
+| **Network** | Network protection + SmartScreen block on `sfrclak[.]com` / `142.11.206[.]73` | Blocking |
+
 ### IoCs
 
 | Indicator | Type | Notes |
 |-----------|------|-------|
-| `sfrclak[.]com` | Domain | C2 server |
-| `142.11.206.73` | IP | C2 IP address |
+| `sfrclak[.]com` | Domain | C2 server (registered via NameCheap) |
+| `142.11.206.73` | IP | C2 IP address (Hostwinds VPS — known Sapphire Sleet infrastructure) |
+| `142.11.206.72` | IP | Possible additional C2 IP (referenced in Microsoft blog mitigation section — may be typo for `.73` or adjacent infrastructure; monitor both) |
 | `hxxp://sfrclak[.]com:8000/6202033` | URL | C2 endpoint (campaign ID `6202033`) |
 | `packages[.]npm[.]org/product0` | POST Body | macOS C2 beacon identifier |
 | `packages[.]npm[.]org/product1` | POST Body | Windows C2 beacon identifier |
 | `packages[.]npm[.]org/product2` | POST Body | Linux C2 beacon identifier |
 | `mozilla/4.0 (compatible; msie 8.0; windows nt 5.1; trident/4.0)` | User-Agent | RAT beacon string (all platforms) |
-| `f7d335205b8d7b20208fb3ef93ee6dc817905dc3ae0c10a0b164f4e7d07121cd` | SHA-256 | Windows Stage 1 (PowerShell download cradle) |
-| `617b67a8e1210e4fc87c92d1d1da45a2f311c08d26e89b12307cf583c900d101` | SHA-256 | Windows Stage 2 (PowerShell RAT) |
-| `92ff08773995ebc8d55ec4b8e1a225d0d1e51efa4ef88b8849d0071230c9645a` | SHA-256 | macOS Mach-O Universal Binary RAT |
-| `fcb81618bb15edfdedfb638b4c08a2af9cac9ecfa551af135a8402bf980375cf` | SHA-256 | Linux Python RAT script |
+| `ed8560c1ac7ceb6983ba995124d5917dc1a00288912387a6389296637d5f815c` | SHA-256 | Windows `%TEMP%\6202033.ps1` — PowerShell RAT payload variant 1 (per Microsoft blog) |
+| `617b67a8e1210e4fc87c92d1d1da45a2f311c08d26e89b12307cf583c900d101` | SHA-256 | Windows `%TEMP%\6202033.ps1` — PowerShell RAT payload variant 2 |
+| `f7d335205b8d7b20208fb3ef93ee6dc817905dc3ae0c10a0b164f4e7d07121cd` | SHA-256 | Windows `%PROGRAMDATA%\system.bat` — persistence batch file created by RAT |
+| `92ff08773995ebc8d55ec4b8e1a225d0d1e51efa4ef88b8849d0071230c9645a` | SHA-256 | macOS Mach-O Universal Binary RAT (`/Library/Caches/com.apple.act.mond`) |
+| `fcb81618bb15edfdedfb638b4c08a2af9cac9ecfa551af135a8402bf980375cf` | SHA-256 | Linux Python RAT script (`/tmp/ld.py`) |
 | `2553649f2322049666871cea80a5d0d6adc700ca` | SHA-1 | `axios@1.14.1` npm tarball |
 | `d6f3f62fd3b9f5432f5782b62d8cfd5247d5ee71` | SHA-1 | `axios@0.30.4` npm tarball |
 | `07d889e2dadce6f3910dcbc253317d28ca61c766` | SHA-1 | `plain-crypto-js@4.2.1` npm tarball |
@@ -125,6 +157,7 @@ This hunting campaign targets TTPs from the **axios npm supply chain compromise*
 
 | Source | URL |
 |--------|-----|
+| **Microsoft Threat Intelligence — Mitigating the Axios npm supply chain compromise** | https://www.microsoft.com/en-us/security/blog/2026/04/01/mitigating-the-axios-npm-supply-chain-compromise/ |
 | Joe Desimone / Elastic Security — Technical Analysis | https://gist.github.com/joe-desimone/36061dabd2bc2513705e0d083a9673e7 |
 | Huntress — Supply-Chain Compromise of axios | https://www.huntress.com/blog/supply-chain-compromise-axios-npm-package |
 | Snyk — axios Compromised: Supply Chain Attack | https://snyk.io/blog/axios-npm-package-compromised-supply-chain-attack-delivers-cross-platform/ |
@@ -377,7 +410,7 @@ adaptation_notes: "NRT-suitable — high-fidelity IoC match. Already row-level. 
 DeviceNetworkEvents
 | where Timestamp > ago(30d)
 | where RemoteUrl has "sfrclak" 
-    or RemoteIP == "142.11.206.73"
+    or RemoteIP in ("142.11.206.73", "142.11.206.72")
 | project 
     Timestamp,
     DeviceName,
@@ -420,7 +453,7 @@ ASimDnsActivityLogs
     DnsQuery,
     DnsQueryTypeName,
     DnsResponseName,
-    DnsResponseCodeName,
+    DnsResponseCode,
     EventResult,
     Dvc,
     EventProduct
@@ -464,7 +497,7 @@ DeviceEvents
 
 ### Query 10 — Stage-2 Payload SHA-256 Hash Match (DeviceFileEvents)
 
-**Goal:** Match known stage-2 payload hashes across the fleet. Covers all four platform-specific payloads.  
+**Goal:** Match known stage-2 payload hashes across the fleet. Covers all five platform-specific payloads (including both Windows PS1 variants identified by Microsoft).  
 **MITRE:** T1041, T1027
 
 <!-- cd-metadata
@@ -482,8 +515,9 @@ adaptation_notes: "Already row-level with SHA256. Convert let statement to inlin
 ```kql
 // Match known stage-2 payload SHA-256 hashes
 let malicious_hashes = dynamic([
-    "f7d335205b8d7b20208fb3ef93ee6dc817905dc3ae0c10a0b164f4e7d07121cd",
+    "ed8560c1ac7ceb6983ba995124d5917dc1a00288912387a6389296637d5f815c",
     "617b67a8e1210e4fc87c92d1d1da45a2f311c08d26e89b12307cf583c900d101",
+    "f7d335205b8d7b20208fb3ef93ee6dc817905dc3ae0c10a0b164f4e7d07121cd",
     "92ff08773995ebc8d55ec4b8e1a225d0d1e51efa4ef88b8849d0071230c9645a",
     "fcb81618bb15edfdedfb638b4c08a2af9cac9ecfa551af135a8402bf980375cf"
 ]);
@@ -1076,4 +1110,143 @@ DeviceProcessEvents
     LastSeen = max(Timestamp)
     by DeviceName, FileName
 | order by ProcessCount desc
+```
+
+---
+
+### Query 28 — Cloud Workload postinstall Execution (CloudProcessEvents)
+
+**Goal:** Detect the `plain-crypto-js` postinstall hook executing on cloud workloads — CI/CD runners, containers, cloud VMs monitored by Defender for Cloud. This query is from the Microsoft blog and covers environments without MDE agent.  
+**MITRE:** T1195.002, T1059.007
+
+> Source: [Microsoft Security Blog](https://www.microsoft.com/en-us/security/blog/2026/04/01/mitigating-the-axios-npm-supply-chain-compromise/)
+
+<!-- cd-metadata
+cd_ready: true
+schedule: "1H"
+category: "Execution"
+title: "Cloud: axios postinstall dropper or C2 download on cloud workload"
+impactedAssets:
+  - type: cloudResource
+    identifier: azureResourceId
+recommendedActions: "CRITICAL: Cloud workload executed the axios supply chain dropper. Rotate all secrets in the CI/CD environment, check for plain-crypto-js in build artifacts, and review connected cloud resources for lateral movement."
+adaptation_notes: "CloudProcessEvents table — requires Defender for Cloud. Schema differs from DeviceProcessEvents: no DeviceName (use AzureResourceId/ContainerName), no InitiatingProcessFileName (use ParentProcessName). Already row-level. Add ReportId."
+-->
+
+```kql
+// Detect plain-crypto-js postinstall hook or C2 download on cloud workloads
+CloudProcessEvents
+| where Timestamp > ago(30d)
+| where (ProcessCurrentWorkingDirectory endswith "/node_modules/plain-crypto-js"
+    and (ProcessCommandLine has_all ("plain-crypto-js", "node setup.js")))
+    or ProcessCommandLine has_all ("/tmp/ld.py", "sfrclak.com:8000")
+| project
+    Timestamp,
+    AzureResourceId,
+    ContainerImageName,
+    KubernetesPodName,
+    ContainerName,
+    AccountName,
+    ProcessCommandLine,
+    ProcessCurrentWorkingDirectory,
+    ParentProcessName
+| order by Timestamp desc
+```
+
+---
+
+### Query 29 — ASIM Network Session IoC Detection (_Im_NetworkSession)
+
+**Goal:** Detect C2 connections across all data sources supported by ASIM network session parsers (firewalls, proxies, NDR, NSGs). Provides broader cross-vendor coverage beyond MDE-only `DeviceNetworkEvents`.  
+**MITRE:** T1041, T1071.001
+
+> Source: [Microsoft Security Blog](https://www.microsoft.com/en-us/security/blog/2026/04/01/mitigating-the-axios-npm-supply-chain-compromise/)
+
+**Note:** ASIM parser functions work via **Advanced Hunting** (not Data Lake MCP — `query_lake` cannot resolve workspace-level functions).
+
+<!-- cd-metadata
+cd_ready: false
+adaptation_notes: "ASIM parser function _Im_NetworkSession — uses summarize aggregation. Works in AH and portal, NOT via Sentinel Data Lake MCP (query_lake). Best deployed as Sentinel Analytics Rule rather than CD."
+-->
+
+```kql
+// ASIM: Detect C2 connections across all normalized network session sources
+let lookback = 30d;
+let ioc_ip_addr = dynamic(["142.11.206.73", "142.11.206.72"]);
+let ioc_domains = dynamic(["sfrclak.com"]);
+_Im_NetworkSession(starttime=todatetime(ago(lookback)), endtime=now())
+| where DstIpAddr in (ioc_ip_addr) or DstDomain has_any (ioc_domains)
+| summarize 
+    FirstSeen = min(TimeGenerated), 
+    LastSeen = max(TimeGenerated),
+    EventCount = count() 
+    by SrcIpAddr, DstIpAddr, DstDomain, Dvc, EventProduct, EventVendor
+| order by EventCount desc
+```
+
+---
+
+### Query 30 — ASIM Web Session IoC Detection (_Im_WebSession)
+
+**Goal:** Detect C2 web connections and URL patterns across all ASIM web session sources (proxies, WAFs, SWGs). Catches HTTP-level indicators including the C2 URL path.  
+**MITRE:** T1041, T1071.001
+
+> Source: [Microsoft Security Blog](https://www.microsoft.com/en-us/security/blog/2026/04/01/mitigating-the-axios-npm-supply-chain-compromise/)
+
+**Note:** ASIM parser functions work via **Advanced Hunting** (not Data Lake MCP — `query_lake` cannot resolve workspace-level functions).
+
+<!-- cd-metadata
+cd_ready: false
+adaptation_notes: "ASIM parser function _Im_WebSession — uses summarize aggregation. Works in AH and portal, NOT via Sentinel Data Lake MCP (query_lake). Best deployed as Sentinel Analytics Rule rather than CD."
+-->
+
+```kql
+// ASIM: Detect C2 web sessions (IP + domain) across all normalized web session sources
+let lookback = 30d;
+let ioc_ip_addr = dynamic(["142.11.206.73", "142.11.206.72"]);
+let ioc_domains = dynamic(["sfrclak.com"]);
+_Im_WebSession(starttime=todatetime(ago(lookback)), endtime=now())
+| where DstIpAddr in (ioc_ip_addr) or Url has_any (ioc_domains)
+| summarize 
+    FirstSeen = min(TimeGenerated), 
+    LastSeen = max(TimeGenerated),
+    EventCount = count() 
+    by SrcIpAddr, DstIpAddr, Url, Dvc, EventProduct, EventVendor
+| order by EventCount desc
+```
+
+---
+
+### Query 31 — Compromised axios/plain-crypto-js in TVM Software Inventory (DeviceTvmSoftwareInventory)
+
+**Goal:** Identify devices with the exact compromised package versions (`axios@1.14.1`, `axios@0.30.4`, `plain-crypto-js@4.2.1`) in TVM software inventory. More targeted than the broad Query 20 — a match here means the device has (or had) a compromised version installed.  
+**MITRE:** T1195.002
+
+> Source: [Microsoft Security Blog](https://www.microsoft.com/en-us/security/blog/2026/04/01/mitigating-the-axios-npm-supply-chain-compromise/)
+
+<!-- cd-metadata
+cd_ready: true
+schedule: "24H"
+category: "InitialAccess"
+title: "Compromised axios/plain-crypto-js version in TVM inventory on {{DeviceName}}"
+impactedAssets:
+  - type: device
+    identifier: deviceName
+recommendedActions: "Device has a compromised package version in software inventory. Isolate, rotate all secrets, check for stage-2 artifacts (wt.exe, system.bat, com.apple.act.mond, ld.py)."
+adaptation_notes: "Already row-level. Add DeviceId. 24H schedule sufficient — TVM inventory updates infrequently."
+-->
+
+```kql
+// Detect exact compromised versions in TVM software inventory
+DeviceTvmSoftwareInventory
+| where (SoftwareName has "axios" and SoftwareVersion in ("1.14.1", "0.30.4"))
+    or (SoftwareName has "plain-crypto-js" and SoftwareVersion == "4.2.1")
+| project
+    DeviceName,
+    SoftwareName,
+    SoftwareVersion,
+    SoftwareVendor,
+    EndOfSupportStatus,
+    EndOfSupportDate
+| order by SoftwareName asc
 ```

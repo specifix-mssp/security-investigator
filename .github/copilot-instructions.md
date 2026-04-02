@@ -422,6 +422,8 @@ Incident investigation and threat hunting tools for Defender XDR and Sentinel:
 **Two KQL execution tools are available. Each has trade-offs:**
 
 > **Key fact:** The LA workspace is connected to the unified Defender portal. Advanced Hunting can query **all** tables in the workspace — XDR-native tables (Device*, Email*, etc.), Sentinel-native tables (SigninLogs, AuditLogs, LAQueryLogs, etc.), and custom tables (`*_CL`). It is NOT limited to Defender XDR data only.
+>
+> **ASIM parser functions** (`_Im_NetworkSession`, `_Im_WebSession`, `_Im_Dns`, `_Im_ProcessEvent`, etc.) and other workspace-level functions are **fully supported in Advanced Hunting** — they resolve against the connected LA workspace. However, `mcp_sentinel-data_query_lake` (Data Lake MCP) **cannot resolve** workspace-level functions and returns `Unknown function` errors for `_Im_*` calls. **Always use `RunAdvancedHuntingQuery` for ASIM parser queries.**
 
 | Factor | `RunAdvancedHuntingQuery` (Advanced Hunting) | `mcp_sentinel-data_query_lake` (Sentinel Data Lake) |
 |--------|-----------------------------------------------|------------------------------------------------------|
