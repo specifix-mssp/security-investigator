@@ -23,7 +23,8 @@ This skill deploys **custom detection rules** to Microsoft Defender XDR via the 
 
 1. **[Prerequisites](#prerequisites)** — Auth, scopes, PowerShell modules
 2. **[Critical Rules](#-critical-rules---read-first-)** — Mandatory constraints (includes query adaptation checklist)
-3. **[API Reference](#api-reference)** — Graph API schema and field values
+3. **[Naming Convention](#naming-convention)** — Standardized `displayName` format (no prefixes, no MITRE IDs, colon separators)
+4. **[API Reference](#api-reference)** — Graph API schema and field values
 4. **[Frequency & Lookback](#frequency--lookback)** — Schedule periods, lookback windows, NRT constraints
 5. **[Deployment Workflow](#deployment-workflow)** — Step-by-step process
 6. **[Batch Deployment](#batch-deployment)** — Manifest-driven multi-rule deployment
@@ -83,6 +84,7 @@ Custom detection queries have strict requirements that differ from Sentinel anal
 | **`impactedAssets` must be non-empty** | The `impactedAssets` array must contain **at least 1 element**. An empty array (`[]`) is rejected with `400 BadRequest`: *"The field ImpactedAssets must be a string or array type with a minimum length of '1'."* Every detection must declare which entity it impacts. See [Pitfall 13](#pitfall-13-impactedassets-must-be-non-empty). |
 | **No `let` statements (NRT)** | **NRT rules (`schedule: "0"`) reject `let` entirely** — the API returns a generic `400 Bad Request`. This is **not documented by Microsoft** (empirically discovered Feb 2026) but consistently reproducible. Inline all dynamic arrays/lists directly in `where` clauses. Non-NRT rules (1H+) tolerate `let`. |
 | **Unique `displayName` AND `title`** | Both the rule `displayName` and the alert `title` must be unique across all custom detections. Duplicate `displayName` returns `409 Conflict`. Duplicate `title` returns `400 Bad Request`. |
+| **🔴 Naming convention for `displayName`** | Follow the standardized naming convention documented in [Naming Convention](#naming-convention) below. No schedule prefixes, no MITRE IDs, no tactic labels — the portal columns already display these. Use clean, descriptive title-case names with colon (`:`) as the only sub-separator. |
 | **150 alerts per run** | Each rule generates a maximum of 150 alerts per execution. Tune the query to avoid alerting on normal day-to-day activity. |
 | **🔴 No response actions** | All rules deployed by this skill MUST use `"responseActions": []`. Automated response actions (isolate device, disable user, block file, etc.) are **PROHIBITED** — they must only be configured manually by a human operator in the Defender portal after the rule is validated. Never populate `responseActions` in manifests or API calls. |
 | **First run = 30-day backfill** | When a new rule is saved, it immediately runs against the past 30 days of data. Expect a burst of initial alerts if the query has broad coverage. |
@@ -156,6 +158,22 @@ SecurityEvent
 - Added `TimeGenerated = TimeGenerated` (identity projection — mandatory)
 - Added `DeviceName = Computer` (impacted asset identifier — device-focused detection)
 - Added `ReportId = CallerProcessId` (proxy ReportId — event-unique identifier)
+
+---
+
+## Naming Convention
+
+The `displayName` should be a clean, title-case description of **what the detection finds**. The portal columns already show Scheduling Type, Tactics, and Techniques — don't repeat them in the name.
+
+| Rule | Example |
+|------|---------|
+| Use colon (`:`) for sub-detail | `Event Log Clearing: Security or System Log Wiped` |
+| Threat actor/family in parentheses at end | `Credential Dumping Tool Execution (Storm-2885)` |
+| TI rules: `Threat Intelligence: {IoC} Match on {Table}` | `Threat Intelligence: IP Match on CloudAppEvents` |
+| **No** schedule prefixes (`NRT —`, `1H —`) | Portal **Scheduling Type** column covers this |
+| **No** MITRE IDs (`T1036 —`) | Portal **Techniques** column covers this |
+| **No** tactic labels (`(Collection)`, `(Exfiltration)`) | Portal **Tactics** column covers this |
+| **No** em dash (`—`) separator | Use colon (`:`) instead |
 
 ---
 
@@ -501,15 +519,59 @@ $rule | ConvertTo-Json -Depth 10
 
 ### Update Rule (PATCH)
 
-```powershell
-$update = @{
-    isEnabled = $false
-    schedule = @{ period = "24H" }
-} | ConvertTo-Json -Depth 10
+`PATCH /beta/security/rules/detectionRules/{id}` — send only the fields you want to change. All fields are optional.
 
+**Updatable fields:**
+
+| Field Path | Type | Notes |
+|-----------|------|-------|
+| `displayName` | String | Rule name — follow [Naming Convention](#naming-convention) |
+| `isEnabled` | Boolean | Enable/disable without deleting |
+| `queryCondition.queryText` | String | KQL query — validates before saving |
+| `schedule.period` | String | `0` (NRT), `1H`, `3H`, `12H`, `24H` |
+| `detectionAction.alertTemplate.title` | String | Alert title (supports `{{Column}}` variables) |
+| `detectionAction.alertTemplate.description` | String | Alert description (supports `{{Column}}` variables) |
+| `detectionAction.alertTemplate.severity` | String | `informational`, `low`, `medium`, `high` |
+| `detectionAction.alertTemplate.category` | String | ATT&CK tactic (e.g., `CredentialAccess`) |
+| `detectionAction.alertTemplate.recommendedActions` | String | `null` to clear |
+| `detectionAction.alertTemplate.impactedAssets` | Array | `null` to clear |
+| `detectionAction.responseActions` | Array | **Always `[]`** — see critical rules |
+
+**Examples:**
+
+```powershell
+# Rename a rule
+$body = @{ displayName = 'Cloud Password Spray: Multi-Account Failed Auth from Single IP' } | ConvertTo-Json
+Invoke-MgGraphRequest -Method PATCH `
+    -Uri "/beta/security/rules/detectionRules/6044" `
+    -Body $body -ContentType "application/json"
+
+# Change schedule and severity
+$body = @{
+    schedule = @{ period = "24H" }
+    detectionAction = @{
+        alertTemplate = @{ severity = "high" }
+    }
+} | ConvertTo-Json -Depth 10
 Invoke-MgGraphRequest -Method PATCH `
     -Uri "/beta/security/rules/detectionRules/5632" `
-    -Body $update -ContentType "application/json"
+    -Body $body -ContentType "application/json"
+
+# Batch rename (loop pattern)
+$renames = @{
+    'Old Rule Name' = 'New Rule Name'
+    'Another Old Name' = 'Another New Name'
+}
+$rules = (Invoke-MgGraphRequest -Method GET `
+    -Uri "/beta/security/rules/detectionRules" -OutputType PSObject).value
+foreach ($old in $renames.Keys) {
+    $rule = $rules | Where-Object { $_.displayName -eq $old }
+    if (-not $rule) { continue }
+    $body = @{ displayName = $renames[$old] } | ConvertTo-Json
+    Invoke-MgGraphRequest -Method PATCH `
+        -Uri "/beta/security/rules/detectionRules/$($rule.id)" `
+        -Body $body -ContentType "application/json"
+}
 ```
 
 ### Delete Rule

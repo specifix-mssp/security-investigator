@@ -1,6 +1,6 @@
 [
   {
-    "displayName": "NRT - Example Alert-Only Detection",
+    "displayName": "Example Alert-Only Detection",
     "title": "Suspicious Activity by {{AccountName}} on {{DeviceName}}",
     "queryText": "SecurityEvent\n| where EventID == 9999\n| where SubjectUserSid != \"S-1-5-18\"\n| project\n    TimeGenerated = TimeGenerated,\n    DeviceName = Computer,\n    AccountName = SubjectUserName,\n    AccountDomain = SubjectDomainName,\n    AccountSid = SubjectUserSid,\n    ReportId = CallerProcessId",
     "schedule": "0",
@@ -16,7 +16,7 @@
     "responseActions": []
   },
   {
-    "displayName": "1H - Example Threshold Detection with Summarize",
+    "displayName": "Example Threshold Detection with Summarize",
     "title": "High Volume Activity ({{EventCount}}) by {{AccountName}}",
     "queryText": "SecurityEvent\n| where ingestion_time() > ago(1h)\n| where EventID == 8888\n| where AccountType != \"Machine\"\n| summarize\n    (TimeGenerated, ReportId) = arg_max(TimeGenerated, CallerProcessId),\n    EventCount = count()\n    by DeviceName = Computer, AccountName = SubjectUserName,\n       AccountDomain = SubjectDomainName, AccountSid = SubjectUserSid\n| where EventCount >= 10\n| project TimeGenerated, DeviceName, AccountName, AccountDomain,\n    AccountSid, EventCount, ReportId",
     "schedule": "1H",
