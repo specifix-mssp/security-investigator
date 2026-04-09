@@ -1,4 +1,4 @@
-# GitHub Copilot - Security Investigation Integration
+﻿# GitHub Copilot - Security Investigation Integration
 
 This workspace contains a security investigation automation system. GitHub Copilot can help you run investigations using natural language.
 
@@ -439,6 +439,20 @@ Incident investigation and threat hunting tools for Defender XDR and Sentinel:
 | Using `ProviderIncidentId` from SecurityIncident for Triage MCP calls | ✅ **REQUIRED** |
 | Extracting Defender ID from `ExtendedProperties.IncidentId` for alert drill-down | ✅ **REQUIRED** |
 
+### 📋 SecurityIncident Query & Output Standards — GLOBAL RULE
+
+**These rules apply to ALL SecurityIncident queries, not just Triage MCP interactions.**
+
+Every SecurityIncident query MUST include `ProviderIncidentId` in the output and every incident presented to the user MUST include a clickable Defender XDR portal URL: `https://security.microsoft.com/incidents/{ProviderIncidentId}`.
+
+| Action | Status |
+|--------|--------|
+| Querying SecurityIncident without projecting `ProviderIncidentId` | ❌ **PROHIBITED** |
+| Presenting incidents to user without Defender XDR portal URL | ❌ **PROHIBITED** |
+| Using `IncidentNumber` as the primary identifier in output | ❌ **PROHIBITED** |
+| Including clickable `https://security.microsoft.com/incidents/{ProviderIncidentId}` link | ✅ **REQUIRED** |
+
+
 ### 🔧 Tool Selection Rule: Data Lake vs Advanced Hunting
 
 **Two KQL execution tools are available. Each has trade-offs:**
@@ -704,8 +718,11 @@ SecurityIncident
 | summarize Title = any(Title), Severity = any(Severity), Status = any(Status),
     Classification = any(Classification), CreatedTime = any(CreatedTime)
     by ProviderIncidentId
+| extend PortalUrl = strcat("https://security.microsoft.com/incidents/", ProviderIncidentId)
 | order by CreatedTime desc
 ```
+
+> **Output rule:** When presenting these results to the user, always render `PortalUrl` as a clickable markdown link: `[XDR #{ProviderIncidentId}]({PortalUrl})`. See [SecurityIncident Query & Output Standards](#-securityincident-query--output-standards--global-rule).
 
 | Field | Source | Meaning |
 |-------|--------|----------|
