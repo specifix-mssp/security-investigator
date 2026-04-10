@@ -96,31 +96,6 @@ copy .vscode\mcp.json.template .vscode\mcp.json
 
 ---
 
-## Capabilities
-
-- **Incident Triage** — Analyze Defender XDR and Sentinel incidents with entity extraction and recursive investigation
-- **User Investigation** — Sign-in anomalies, MFA status, device compliance, Identity Protection, HTML reports
-- **Device Investigation** — Defender alerts, vulnerabilities, logged-on users, process/network/file events
-- **IoC Analysis** — IP addresses, domains, URLs, file hashes with threat intelligence correlation
-- **Honeypot Analysis** — Attack patterns, threat intel, vulnerability assessment, executive reports
-- **KQL Query Authoring** — Schema-validated query generation with community examples
-- **Authentication Forensics** — SessionId tracing, token reuse vs MFA, geographic anomalies
-- **CA Policy Investigation** — Conditional Access failures, policy bypass detection
-- **Scope Drift Detection** — 90-day behavioral baseline vs 7-day comparison for service principals, user accounts, and devices (3 specialized sub-skills)
-- **MCP Usage Monitoring** — Graph MCP, Sentinel MCP, Azure MCP server audit with behavioral baselines, anomaly detection, and composite scoring
-- **Email Threat Posture** — Defender for Office 365 reporting: inbound mail flow, threat composition (phishing/spam/malware), email authentication (DMARC/DKIM/SPF), ZAP post-delivery remediation, Safe Links click protection, attachment analysis, MDO incident summary, Email Protection Score
-- **Ingestion & Cost Analysis** — Table-level volume breakdown, tier classification, anomaly detection, analytic rule inventory, license benefit analysis, migration candidates
-- **MITRE ATT&CK Coverage** — Tactic/technique coverage matrix, rule-to-technique mapping, coverage gap identification, SOC Optimization alignment, untagged rule remediation, MITRE Coverage Score (5 weighted dimensions)
-- **Custom Detection Authoring** — Create, deploy, update, and manage Defender XDR custom detection rules via Graph API with manifest-driven batch deployment
-- **AI Agent Posture Audit** — Agent inventory, authentication gaps, MCP tool proliferation, knowledge source exposure, XPIA risk, Agent Security Score for Copilot Studio and M365 Copilot agents
-- **Identity Posture Report** — Multi-provider account inventory, privileged account audit, stale/deleted account hygiene, password posture, risk distribution, multi-provider identity linking, Identity Posture Score
-- **Data Security Analysis** — Sensitive information type (SIT) access patterns, DLP policy correlation, insider risk triage, EDM monitoring, file-based risk ranking, spike detection across DataSecurityEvents
-- **Threat Pulse** — Rapid 15-minute broad-spectrum security scan across 9 domains (incidents, identity, endpoint, exposure, SPN drift, email, UEBA, auth spray, CVEs) with prioritized dashboard and drill-down recommendations
-- **App Registration Posture** — App registration and service principal security posture: dangerous Graph API permissions, ownership risk, credential hygiene, cross-tenant SPN exposure, KQL attack chain detection, App Permission Risk Score
-- **Visualizations** — Interactive heatmaps, geographic attack maps, and SVG data dashboards
-
----
-
 ## 🤖 Agent Skills
 
 This system uses **[VS Code Agent Skills](https://code.visualstudio.com/docs/copilot/customization/agent-skills)** to provide modular, domain-specific investigation workflows. Skills are automatically detected based on keywords in your prompts.
