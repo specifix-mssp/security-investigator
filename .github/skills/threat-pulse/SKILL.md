@@ -207,20 +207,23 @@ Estimated time: ~2–4 minutes
    - **Options:** One per prompt — **Label:** `<icon> <dynamic prompt text>`, **Description:** `Q<N>: <finding> → <skill or query file>`
    - Penultimate option: **Label:** `💾 Save full investigation report` / **Description:** `Save the complete Threat Pulse session (scan + all drill-downs) as a markdown file`
    - Final option: **Label:** `Skip` / **Description:** `No follow-up — investigation complete`
-   - **multiSelect:** `false`
-3. If user selects **Skip** or pool is empty: end skill execution
-4. If user selects **💾 Save full investigation report:**
+   - **multiSelect:** `true`
+3. If user selects **Skip** (alone) or pool is empty: end skill execution
+4. If user's selection includes **💾 Save full investigation report:**
    a. Compile the original Threat Pulse dashboard + all drill-down investigation results accumulated during this session into a single markdown file
    b. Save to `reports/threat-pulse/Threat_Pulse_YYYYMMDD_HHMMSS.md` using the [Markdown File Report Template](#markdown-file-report-template)
    c. Append a `## Drill-Down Investigation Results` section containing the findings from each follow-up action completed during this session, in the order they were executed
-   d. Return to step 2 — the save option is removed from the pool (report already saved), remaining prompts stay available
-5. If user selects an action:
-   a. **Skill prompt:** load the skill's SKILL.md, execute the investigation with the target entity
-   b. **Query file prompt:** read the query file, add as context, execute the hunt
-   c. **IOC prompt:** load `ioc-investigation` skill, execute with the target indicator
-   d. Remove the completed prompt from the pool
-   e. Scan results for **new evidence** (entities, IOCs, TTPs not in original Threat Pulse results) — generate new prompts if found, prepend to pool with `🆕` tag
-   f. **Return to step 2 — call the interactive question tool again.** Every loop iteration MUST use `vscode_askQuestions` to present the updated pool as a selectable list. Do NOT render a markdown table/numbered list as a substitute.
+   d. Remove the save option from the pool (report already saved). If no other actions were selected alongside it, return to step 2. Otherwise continue to step 5 with the remaining selections.
+5. If user selects one or more actions:
+   a. Build a **todo list** with one item per selected action, all `not-started`
+   b. Execute each action **sequentially** in selection order:
+      - **Skill prompt:** load the skill's SKILL.md, execute the investigation with the target entity
+      - **Query file prompt:** read the query file, add as context, execute the hunt
+      - **IOC prompt:** load `ioc-investigation` skill, execute with the target indicator
+      - Mark each todo `completed` as it finishes
+   c. Remove all completed prompts from the pool
+   d. Scan results for **new evidence** (entities, IOCs, TTPs not in original Threat Pulse results) — generate new prompts if found, prepend to pool with `🆕` tag
+   e. **Return to step 2 — call the interactive question tool again.** Every loop iteration MUST use `vscode_askQuestions` to present the updated pool as a selectable list. Do NOT render a markdown table/numbered list as a substitute.
 
 **Prompt pool rules:**
 - Completed prompts are removed — never re-offered
