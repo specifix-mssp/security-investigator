@@ -30,9 +30,18 @@ copy .env.template .env
 copy .vscode\mcp.json.template .vscode\mcp.json
 # All platform servers are pre-configured — just needs a GitHub PAT on first use
 
-# 5. Open Copilot Chat (Ctrl+Shift+I) in Agent mode and ask:
-#    "What skills do you have access to?"
-#    "Investigate user@domain.com for the last 7 days"
+# 5. Open Copilot Chat (Ctrl+Shift+I) in Agent mode and start with:
+#    "Run a threat pulse scan"
+```
+
+**🚀 Recommended first run:** The **Threat Pulse** skill is the best starting point. It runs a 15-minute broad-spectrum scan across 9 security domains (incidents, identity, endpoint, exposure, email, UEBA, auth spray, privileged ops, CVEs) and produces a prioritized dashboard with color-coded verdicts (🔴 Escalate / 🟠 Investigate / 🟡 Monitor / ✅ Clear). Each finding includes a drill-down recommendation pointing to a specialized skill — so after the scan, you'll know exactly where to focus and which follow-up command to run.
+
+**Other example prompts:**
+```
+"Investigate user@domain.com for the last 7 days"    → user-investigation
+"Analyze incident 12345"                              → incident-investigation
+"Is this IP malicious? 203.0.113.42"                  → ioc-investigation
+"What skills do you have access to?"                  → lists all 25 skills
 ```
 
 **For detailed workflows and KQL queries:**
