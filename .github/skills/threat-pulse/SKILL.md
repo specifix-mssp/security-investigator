@@ -1,32 +1,27 @@
 ---
 name: threat-pulse
-description: 'Recommended starting point for new users and daily SOC operations. Quick 15-minute security posture scan across 9 domains: active incidents, identity anomalies, risky sign-ins, device process drift, rare process chains, critical asset exposure, SPN behavioral drift, email threats, UEBA behavioral signals, mailbox rule manipulation, privileged operations, and exploitable CVEs. Produces a prioritized Threat Pulse Dashboard with color-coded verdicts and drill-down recommendations pointing to specialized skills. Trigger on getting-started questions like "what can you do", "where do I start", "help me investigate". Supports inline chat and markdown file output'
+description: 'Recommended starting point for new users and daily SOC operations. Quick 15-minute security posture scan across 9 domains: active incidents, identity (human + NonHuman), device process drift, rare process chains, email threats, admin & cloud ops, critical asset exposure, and exploitable CVEs. 13 queries executed in parallel batches, producing a prioritized Threat Pulse Dashboard with color-coded verdicts (🔴 Escalate / 🟠 Investigate / 🟡 Monitor / ✅ Clear) and drill-down recommendations pointing to specialized skills. Trigger on getting-started questions like "what can you do", "where do I start", "help me investigate". Supports inline chat and markdown file output'
 ---
 
 # Threat Pulse — Instructions
 
 ## Purpose
 
-The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the "if you only had 15 minutes" scenario. It executes 12 high-level queries across 9 security domains in parallel, producing a prioritized dashboard of findings with drill-down recommendations to specialized investigation skills.
+The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the "if you only had 15 minutes" scenario. It executes 13 queries across 9 security domains in parallel, producing a prioritized dashboard of findings with drill-down recommendations to specialized investigation skills.
 
 **What this skill covers:**
 
 | Domain | Key Questions Answered |
 |--------|----------------------|
-| 🔴 **Incidents** | What high-severity incidents are open and unresolved? How old are they? Who owns them? |
-| 🔐 **Identity Anomalies** | Which users have the most anomalous sign-in patterns this week? |
-| 🔐 **Identity Protection** | How many risky sign-ins? Which users are atRisk or confirmedCompromised? |
-| 💻 **Device Drift** | Which endpoints deviated most from their process behavioral baseline? |
-| 💻 **Rare Processes** | What singleton process chains exist that warrant threat hunting? |
-| 🛡️ **Critical Assets** | Are any critical assets internet-facing? Do they have RCE vulnerabilities? |
-| 🤖 **SPN Drift** | Which service principals expanded their resource/IP/location footprint? |
+| 🔴 **Incidents** | What high-severity incidents are open and unresolved? How old are they? Who owns them? What was recently resolved — TP rate, MITRE tactics, severity distribution? |
+| 🔐 **Identity (Human)** | Which users have the most anomalous sign-in patterns this week? How many risky sign-ins? Are there password spray / brute-force patterns? |
+| 🤖 **Identity (NonHuman)** | Which service principals expanded their resource/IP/location footprint? |
+| 💻 **Endpoint** | Which endpoints deviated most from their process behavioral baseline? What singleton process chains exist? |
 | 📧 **Email Threats** | What's the phishing/spam/malware breakdown? Were any phishing emails delivered? |
-| 📈 **UEBA Behaviors** | What sub-alert behavioral signals exist (impossible travel, mass download, credential manipulation)? |
-| � **Auth Spray** | Are there password spray / brute-force patterns across Entra ID sign-ins and RDP/SSH endpoints? |
-| 🔑 **Privileged Ops** | Who performed high-impact admin operations this week? |
-| 🛡️ **Exploitable CVEs** | What exploitable CVEs (CVSS ≥ 8) are present across the fleet? |
+| 🔑 **Admin & Cloud Ops** | What mailbox rules, OAuth consents, transport rules, or Copilot interactions occurred? Who performed high-impact admin operations? |
+| 🛡️ **Exposure** | Are any critical assets internet-facing with RCE vulnerabilities? What exploitable CVEs (CVSS ≥ 8) are present across the fleet? |
 
-**Data sources:** `SecurityIncident`, `SecurityAlert`, `Signinlogs_Anomalies_KQL_CL` (custom, fallback: `SigninLogs`), `SigninLogs`, `DeviceProcessEvents`, `DeviceLogonEvents`, `ExposureGraphNodes`, `AADServicePrincipalSignInLogs`, `EmailEvents`, `BehaviorInfo`, `BehaviorEntities`, `AuditLogs`, `DeviceTvmSoftwareVulnerabilities`, `DeviceTvmSoftwareVulnerabilitiesKB`
+**Data sources:** `SecurityIncident`, `SecurityAlert`, `Signinlogs_Anomalies_KQL_CL` (custom, fallback: `SigninLogs`), `SigninLogs`, `DeviceProcessEvents`, `DeviceLogonEvents`, `ExposureGraphNodes`, `AADServicePrincipalSignInLogs`, `EmailEvents`, `CloudAppEvents`, `AuditLogs`, `DeviceTvmSoftwareVulnerabilities`, `DeviceTvmSoftwareVulnerabilitiesKB`
 
 **References:**
 - [Microsoft Sentinel — SecurityIncident](https://learn.microsoft.com/en-us/azure/sentinel/data-source-schema-reference#securityincident)
@@ -47,7 +42,7 @@ The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the
 | `DOCS_EXPOSURE_MANAGEMENT` | `https://learn.microsoft.com/en-us/security-exposure-management/query-enterprise-exposure-graph` |
 | `DOCS_TVM` | `https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicetvmsoftwarevulnerabilities-table` |
 | `DOCS_EMAIL_EVENTS` | `https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-emailevents-table` |
-| `DOCS_BEHAVIOR_ANALYTICS` | `https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-behaviorinfo-table` |
+| `DOCS_CLOUD_APP_EVENTS` | `https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-cloudappevents-table` |
 | `XDR_INCIDENT_BASE` | `https://security.microsoft.com/incidents/` |
 
 **Usage in reports:** When referencing incidents, always construct portal links as `XDR_INCIDENT_BASE` + `ProviderIncidentId`. When referencing documentation, use the appropriate `DOCS_*` label.
@@ -58,7 +53,7 @@ The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the
 
 1. **[Critical Workflow Rules](#-critical-workflow-rules---read-first-)** — Mandatory execution requirements
 2. **[Execution Workflow](#execution-workflow)** — Phased query plan with parallel groups
-3. **[Sample KQL Queries](#sample-kql-queries)** — All 12 verified queries with fallback logic
+3. **[Sample KQL Queries](#sample-kql-queries)** — All 13 verified queries with fallback logic
 4. **[Post-Processing](#post-processing)** — Device drift score computation, cross-query correlation
 5. **[Query File Recommendations](#query-file-recommendations)** — Dynamic hunting follow-up from findings
 6. **[Output Modes](#output-modes)** — Inline, markdown file, or both
@@ -83,17 +78,25 @@ The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the
 
 4. **⛔ MANDATORY: Evidence-based analysis only** — Every finding must cite query results. Every "clear" verdict must cite 0 results. Follow the Evidence-Based Analysis rule from `copilot-instructions.md`.
 
-5. **Parallel execution** — Run all Data Lake queries in parallel (Q1, Q2/Q2b, Q3, Q7, Q10, Q11). Run all Advanced Hunting queries in parallel (Q4, Q5, Q6, Q8, Q9, Q12). The two groups can overlap.
+5. **Parallel execution** — Run all Data Lake queries in parallel (Q1, Q1b, Q2/Q2b, Q3, Q5, Q10). Run all Advanced Hunting queries in parallel (Q4, Q6, Q7, Q8, Q9, Q11, Q12). The two groups can overlap.
 
 6. **Graceful fallback for Q2** — `Signinlogs_Anomalies_KQL_CL` is a custom table that may not exist in all workspaces. If query returns `SemanticError: Failed to resolve table`, immediately execute **Q2b** (Identity Protection fallback) instead. Do NOT report the custom table failure as an error — silently fall back and note the data source in the report.
 
 7. **Cross-query correlation** — After all queries complete, check for correlated findings:
    - User appearing in **both** Q2/Q2b anomalies AND Q3 risky sign-ins → escalate priority
-   - SPN drift (Q7) + unusual OAuth credential addition (Q9) → escalate priority
-   - Device in rare process chains (Q5) + device in CVE list (Q12) → escalate priority
+   - SPN drift (Q5) + unusual credential/consent activity (Q9) → escalate priority
+   - Device in rare process chains (Q7) + device in CVE list (Q12) → escalate priority
    - Incident entities (Q1) matching users in Q2/Q3 → link findings
 
 8. **SecurityIncident output rule** — Every incident MUST include a clickable Defender XDR portal URL: `https://security.microsoft.com/incidents/{ProviderIncidentId}`.
+
+9. **⛔ MANDATORY: Query File Recommendations for 🔴/🟠 verdicts** — After assigning verdicts and BEFORE rendering the final report, check if ANY domain received a 🔴 or 🟠 verdict. If yes, you MUST execute the [Query File Recommendations](#query-file-recommendations) procedure (keyword extraction → `grep_search` in `queries/**` → file matching → include section in report). This is NOT optional. Skipping this step when 🔴/🟠 verdicts exist violates the skill workflow.
+
+| Condition | Required Action |
+|-----------|----------------|
+| Any 🔴 or 🟠 verdict exists | **MUST** run query file search and include `📂 Recommended Query Files` section |
+| All verdicts are ✅ or 🟡 | Omit the section entirely |
+| Query file search returns 0 matches | Include the section with the "no matching files" template |
 
 ---
 
@@ -104,43 +107,65 @@ The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the
 1. Read `config.json` for workspace ID and Azure MCP parameters
 2. Call `list_sentinel_workspaces()` to enumerate available workspaces
 3. Ask user for output mode and lookback preference (or use defaults)
+4. **Display scan summary** — Before executing any queries, output the following brief to the user:
 
-### Phase 1: Data Lake Queries (Q1, Q2, Q3, Q7, Q11)
+```
+🔍 Threat Pulse — Scan Plan
 
-**Run all 5 in parallel — no dependencies between queries.**
+Workspace: <WorkspaceName> (<WorkspaceId>)
+Lookback: <N>d (user-selected or default 7d)
+Output: <Inline / Markdown file / Both>
+
+Executing 13 queries across 9 domains:
+  🔴 Incidents      — Open high-severity + 7d closed summary (Q1, Q1b)
+  🔐 Identity       — Sign-in anomalies, risky sign-ins, auth spray (Q2, Q3, Q4)
+  🤖 NonHuman ID    — Service principal behavioral drift (Q5)
+  💻 Endpoint       — Device process drift, rare process chains (Q6, Q7)
+  📧 Email          — Inbound threat snapshot (Q8)
+  🔑 Admin & Cloud  — Cloud app ops, privileged operations (Q9, Q10)
+  🛡️ Exposure       — Critical assets, exploitable CVEs (Q11, Q12)
+
+Data Lake: 6 queries in parallel | Advanced Hunting: 7 queries in parallel
+Estimated time: ~2–4 minutes
+```
+
+### Phase 1: Data Lake Queries (Q1, Q1b, Q2, Q3, Q5, Q10)
+
+**Run all 6 in parallel — no dependencies between queries.**
 
 | Query | Domain | Purpose | Tool |
 |-------|--------|---------|------|
 | Q1 | 🔴 Incidents | Open High/Critical incidents with MITRE tactics | `query_lake` |
-| Q2 | 🔐 Identity | Fleet-wide sign-in anomalies (High/Medium) | `query_lake` |
-| Q3 | 🔐 Identity | Risky sign-ins / Identity Protection summary | `query_lake` |
-| Q7 | 🤖 SPN | Service principal behavioral drift (90d vs 7d) | `query_lake` |
-| Q11 | 🔑 Privilege | High-impact admin operations | `query_lake` |
+| Q1b | 🔴 Incidents | 7-day closed incident summary (classification, MITRE, severity) | `query_lake` |
+| Q2 | 🔐 Identity (Human) | Fleet-wide sign-in anomalies (High/Medium) | `query_lake` |
+| Q3 | 🔐 Identity (Human) | Risky sign-ins / Identity Protection summary | `query_lake` |
+| Q5 | 🤖 Identity (NonHuman) | Service principal behavioral drift (90d vs 7d) | `query_lake` |
+| Q10 | 🔑 Admin & Cloud Ops | High-impact admin operations (AuditLogs) | `query_lake` |
 
 **Fallback:** If Q2 fails with table resolution error, execute Q2b in its place.
 
-### Phase 2: Advanced Hunting Queries (Q4, Q5, Q6, Q8, Q9, Q10, Q12)
+### Phase 2: Advanced Hunting Queries (Q4, Q6, Q7, Q8, Q9, Q11, Q12)
 
 **Run all 7 in parallel — no dependencies between queries.**
 
 | Query | Domain | Purpose | Tool |
 |-------|--------|---------|------|
-| Q4 | 💻 Endpoint | Fleet device process drift (7d baseline vs 1d) | `RunAdvancedHuntingQuery` |
-| Q5 | 💻 Endpoint | Rare process chain singletons (90d) | `RunAdvancedHuntingQuery` |
-| Q6 | 🛡️ Exposure | Internet-facing critical assets | `RunAdvancedHuntingQuery` |
+| Q4 | 🔐 Identity (Human) | Password spray / brute-force across Entra ID + RDP/SSH | `RunAdvancedHuntingQuery` |
+| Q6 | 💻 Endpoint | Fleet device process drift (7d baseline vs 1d) | `RunAdvancedHuntingQuery` |
+| Q7 | 💻 Endpoint | Rare process chain singletons (90d) | `RunAdvancedHuntingQuery` |
 | Q8 | 📧 Email | Inbound email threat snapshot | `RunAdvancedHuntingQuery` |
-| Q9 | 📈 UEBA | MCAS/UEBA behavioral detections | `RunAdvancedHuntingQuery` |
-| Q10 | 🔐 Auth Spray | Password spray / brute-force across Entra ID + RDP/SSH | `RunAdvancedHuntingQuery` |
-| Q12 | 🛡️ Vuln | Exploitable CVEs (CVSS ≥ 8) across fleet | `RunAdvancedHuntingQuery` |
+| Q9 | 🔑 Admin & Cloud Ops | Cloud app suspicious activity (CloudAppEvents) | `RunAdvancedHuntingQuery` |
+| Q11 | 🛡️ Exposure | Internet-facing critical assets | `RunAdvancedHuntingQuery` |
+| Q12 | 🛡️ Exposure | Exploitable CVEs (CVSS ≥ 8) across fleet | `RunAdvancedHuntingQuery` |
 
 ### Phase 3: Post-Processing & Report
 
-1. Interpret device drift scores from Q4 results (see [Post-Processing](#post-processing))
+1. Interpret device drift scores from Q6 results (see [Post-Processing](#post-processing))
 2. Run cross-query correlation checks (see rule 7 above)
 3. Assign verdicts to each domain (🔴 Escalate / 🟠 Investigate / 🟡 Monitor / ✅ Clear)
 4. Generate prioritized recommendations with drill-down skill references
-5. Search for relevant query files (see [Query File Recommendations](#query-file-recommendations)) — only when 🔴/🟠 verdicts exist
-6. Render output in requested mode
+5. **⛔ STOP — Query File Recommendation Gate:** Before proceeding to step 6, explicitly check: _"Do any domains have a 🔴 or 🟠 verdict?"_ If YES → execute the [Query File Recommendations](#query-file-recommendations) procedure NOW (extract keywords from findings → `grep_search` scoped to `queries/**` → match files → prepare the `📂 Recommended Query Files` section). If NO (all ✅/🟡) → skip. **Do NOT proceed to step 6 until this gate is resolved.**
+6. Render output in requested mode (report MUST include the Query Files section if step 5 triggered it)
 
 ---
 
@@ -184,7 +209,56 @@ SecurityIncident
 - 🔴 Escalate: Any incident with `AgeDays > 30` AND empty `OwnerUPN`
 - 🟠 Investigate: Any incident with `AgeDays > 14` or `AlertCount > 10`
 - 🟡 Monitor: Open incidents exist but are assigned and recently triaged
-- ✅ Clear: 0 open High/Critical incidents
+- ✅ Clear: 0 open High/Critical incidents (Q1b closed summary still renders as context)
+
+---
+
+### Query 1b: Closed Incident Summary (7-Day Lookback)
+
+🔴 **Threat landscape context** — Even when all incidents are resolved, the classification breakdown, MITRE tactic distribution, and severity mix from recent closures provide actionable signals for cross-correlation and query file recommendations.
+
+**Tool:** `mcp_sentinel-data_query_lake`
+
+**Always runs in parallel with Q1 — not conditional on Q1 results.**
+
+```kql
+SecurityIncident
+| where TimeGenerated > ago(7d)
+| summarize arg_max(TimeGenerated, *) by IncidentNumber
+| where Status == "Closed"
+| mv-expand AlertId = AlertIds | extend AlertId = tostring(AlertId)
+| join kind=leftouter (
+    SecurityAlert
+    | summarize arg_max(TimeGenerated, *) by SystemAlertId
+    | project SystemAlertId, Tactics
+) on $left.AlertId == $right.SystemAlertId
+| summarize
+    Total = dcount(IncidentNumber),
+    TruePositive = dcountif(IncidentNumber, Classification == "TruePositive"),
+    BenignPositive = dcountif(IncidentNumber, Classification == "BenignPositive"),
+    FalsePositive = dcountif(IncidentNumber, Classification == "FalsePositive"),
+    Undetermined = dcountif(IncidentNumber, Classification == "Undetermined"),
+    HighCritical = dcountif(IncidentNumber, Severity in ("High", "Critical")),
+    MediumLow = dcountif(IncidentNumber, Severity in ("Medium", "Low")),
+    Tactics = make_set(Tactics)
+```
+
+**Purpose:** Provides a 7-day closed incident summary with classification breakdown (TP/BP/FP/Undetermined), severity distribution, and aggregated MITRE tactics. This data feeds three downstream uses:
+1. **TP rate signal** — High TruePositive ratio indicates an active threat environment
+2. **MITRE tactic context** — Tactics from closed TPs identify the current threat landscape for cross-correlation with Q2/Q3/Q7/Q8 findings
+3. **Query file recommendation fuel** — Tactic keywords from Q1b feed the keyword extraction rules for the `queries/` library search
+
+**Verdict logic:**
+- 🟠 Investigate: `TruePositive / Total > 0.5` (majority of closures are real threats — active threat environment)
+- 🟡 Monitor: Any TruePositive closures exist, or `Undetermined > 0` (some incidents lack classification)
+- ✅ Clear: 0 TruePositive closures; all closures are BenignPositive or FalsePositive
+- 🔵 Informational: 0 closed incidents in 7d
+
+**Rendering rules:**
+- **Always render** Q1b results in the report, regardless of Q1 verdict
+- Present as a compact summary block under the Q1 section (not a separate dashboard row)
+- Flatten the `Tactics` array and report only distinct tactic names from TruePositive incidents
+- If 0 closed incidents in 7d, display: "No incidents closed in the last 7 days"
 
 ---
 
@@ -220,6 +294,12 @@ Signinlogs_Anomalies_KQL_CL
 
 **Purpose:** Surfaces top 15 users with the most High/Medium sign-in anomalies in the past 7 days. Geographic novelty (new countries/cities) combined with high hit counts indicates potential account compromise or token theft.
 
+**Verdict logic:**
+- 🔴 Escalate: Any user with `HighCount > 0` (High-severity anomalies with geo-novelty + high hit counts)
+- 🟠 Investigate: `AnomalyCount > 5` for any single user, or users with `NewInteractiveIP` / `NewInteractiveDeviceCombo` anomaly types
+- 🟡 Monitor: Only Medium-severity `NewNonInteractive*` anomalies with low hit counts
+- ✅ Clear: 0 High/Medium anomalies across the fleet
+
 ---
 
 ### Query 2b: Fleet-Wide Sign-In Anomalies (Fallback — Identity Protection)
@@ -253,6 +333,12 @@ RiskySignins
 ```
 
 **Purpose:** Fallback that achieves similar anomaly coverage via Identity Protection risk detections (unfamiliarFeatures, impossibleTravel, maliciousIPAddress, etc.) when the custom anomaly table is unavailable. Results are formatted to match Q2's output shape for consistent report rendering.
+
+**Verdict logic:**
+- 🔴 Escalate: Any user with `HighCount > 3` or multiple users with `HighCount > 0`
+- 🟠 Investigate: `HighCount > 0` for any user, or `AnomalyCount > 5` with risk events indicating `impossibleTravel` or `maliciousIPAddress`
+- 🟡 Monitor: Only `MediumCount > 0` with low-severity risk event types (e.g., `unfamiliarFeatures`)
+- ✅ Clear: 0 risky sign-in anomalies across the fleet
 
 **Report note:** When Q2b is used instead of Q2, include this in the report header: `📊 Data Source: Identity Protection (SigninLogs risk events) — custom anomaly table not available in this workspace.`
 
@@ -291,119 +377,58 @@ SigninLogs
 
 ---
 
-### Query 4: Fleet-Wide Device Process Drift
+### Query 4: Password Spray / Brute-Force Detection
 
-💻 **Endpoint behavioral baseline** — Per-device drift scores computed in-query (7d baseline vs 1d recent), returned pre-ranked.
+🔐 **Auth spray detection (T1110.003 / T1110.001)** — Identifies IPs targeting multiple users with failed auth across Entra ID cloud sign-ins AND RDP/SSH/network logons on endpoints.
 
 **Tool:** `RunAdvancedHuntingQuery`
 
 ```kql
-DeviceProcessEvents
-| where Timestamp > ago(7d)
-| extend IsRecent = Timestamp >= ago(1d)
+let EntraSpray = SigninLogs
+| where TimeGenerated > ago(7d)
+| where ResultType in ("50126", "50053", "50057")
 | summarize
-    BL_Events = countif(not(IsRecent)),
-    RC_Events = countif(IsRecent),
-    BL_Procs = dcountif(FileName, not(IsRecent)),
-    RC_Procs = dcountif(FileName, IsRecent),
-    BL_Accts = dcountif(AccountName, not(IsRecent)),
-    RC_Accts = dcountif(AccountName, IsRecent),
-    BL_Chains = dcountif(strcat(InitiatingProcessFileName, "→", FileName), not(IsRecent)),
-    RC_Chains = dcountif(strcat(InitiatingProcessFileName, "→", FileName), IsRecent),
-    BL_Comps = dcountif(ProcessVersionInfoCompanyName, not(IsRecent)),
-    RC_Comps = dcountif(ProcessVersionInfoCompanyName, IsRecent)
-    by DeviceName
-| where RC_Events > 0 and BL_Events > 0
-| extend
-    VolDrift = round(RC_Events * 600.0 / max_of(BL_Events, 1), 0),
-    ProcDrift = round(RC_Procs * 100.0 / max_of(BL_Procs, 1), 0),
-    AcctDrift = round(RC_Accts * 100.0 / max_of(BL_Accts, 1), 0),
-    ChainDrift = round(RC_Chains * 100.0 / max_of(BL_Chains, 1), 0),
-    CompDrift = round(RC_Comps * 100.0 / max_of(BL_Comps, 1), 0)
-| extend DriftScore = round(VolDrift * 0.30 + ProcDrift * 0.25 + AcctDrift * 0.15 + ChainDrift * 0.20 + CompDrift * 0.10, 0)
-| order by DriftScore desc
-| take 10
-| project DeviceName, DriftScore, VolDrift, ProcDrift, AcctDrift, ChainDrift, CompDrift
+    FailedAttempts = count(),
+    TargetUsers = dcount(UserPrincipalName),
+    SampleTargets = make_set(UserPrincipalName, 5),
+    Protocols = make_set(AppDisplayName, 3),
+    Countries = make_set(Location, 3)
+    by SourceIP = IPAddress
+| where TargetUsers >= 5
+| extend Surface = "Entra ID";
+let EndpointBrute = DeviceLogonEvents
+| where Timestamp > ago(7d)
+| where ActionType == "LogonFailed"
+| where LogonType in ("RemoteInteractive", "Network")
+| where isnotempty(RemoteIP)
+| summarize
+    FailedAttempts = count(),
+    TargetUsers = dcount(AccountName),
+    SampleTargets = make_set(AccountName, 5),
+    Protocols = make_set(strcat(LogonType, " → ", DeviceName), 3),
+    Countries = dynamic(["—"])
+    by SourceIP = RemoteIP
+| where FailedAttempts >= 10
+| extend Surface = "Endpoint (RDP/SSH)";
+union EntraSpray, EndpointBrute
+| order by TargetUsers desc, FailedAttempts desc
+| take 15
 ```
 
-**Purpose:** Returns the top 10 devices ranked by composite drift score, pre-computed in KQL. No LLM-side math required — just interpret the returned scores.
-
-**Drift formula notes:**
-- **Volume (`VolDrift`):** `RC_Events * 600 / BL_Events` — multiplies recent by 600 (= 100 × 6 baseline days) to normalize to a per-day rate before computing the percentage. This is the only metric that needs time normalization because event counts scale linearly with time.
-- **Dcount metrics (`ProcDrift`, `AcctDrift`, `ChainDrift`, `CompDrift`):** `RC_Dim * 100 / BL_Dim` — compared directly WITHOUT dividing baseline by 6. Distinct counts do NOT scale linearly with time (seeing 4 unique accounts over 6 days ≠ 0.67 accounts/day). The 6-day baseline captures the "universe" of distinct values; a single day shows what fraction was active. 100% = normal, >100% = new values appeared.
-- **Weights:** Volume 30%, Processes 25%, Chains 20%, Accounts 15%, Companies 10%.
-
----
-
-### Query 5: Rare Process Chain Singletons
-
-💻 **Threat hunting** — Parent→child process combinations appearing fewer than 3 times in 90 days.
-
-**Tool:** `RunAdvancedHuntingQuery`
-
-```kql
-DeviceProcessEvents
-| where Timestamp > ago(90d)
-| summarize 
-    Count = count(),
-    UniqueDevices = dcount(DeviceName),
-    SampleDevice = take_any(DeviceName),
-    SampleUser = strcat(take_any(AccountDomain), "\\", take_any(AccountName)),
-    SampleChildCmd = take_any(ProcessCommandLine),
-    GrandparentProcess = take_any(InitiatingProcessParentFileName),
-    LastSeen = max(Timestamp)
-    by ParentProcess = InitiatingProcessFileName, ChildProcess = FileName
-| where Count < 3
-| order by Count asc, UniqueDevices asc
-| take 20
-```
-
-**Purpose:** Surfaces the 20 rarest process chains — singletons and near-singletons. Effective for spotting LOLBin abuse, malware execution, or novel attack tooling. Review `SampleChildCmd` for suspicious command-line patterns.
+**Purpose:** Detects password spray (1 IP → many users, MITRE T1110.003) and brute-force (1 IP → high failure count, T1110.001) across two surfaces:
+- **Entra ID:** Cloud sign-in failures (50126=bad password, 50053=locked account, 50057=disabled account). An IP targeting ≥5 distinct users with these errors is a strong spray signal. `Protocols` reveals if legacy auth (POP/IMAP/SMTP) is being targeted.
+- **Endpoint:** RDP (`RemoteInteractive`) and SSH/SMB (`Network`) failed logons on MDE-enrolled devices. Threshold of ≥10 failures catches brute-force against exposed endpoints.
 
 **Verdict logic:**
-- 🟠 Investigate: Any singleton with suspicious parent (cmd.exe, powershell.exe, wscript.exe, mshta.exe, rundll32.exe) or child running from temp/user profile directories
-- 🟡 Monitor: Rare chains from system/update processes (version-stamped binaries, Azure VM agents)
-- ✅ Clear: All rare chains are explainable infrastructure artifacts
+- 🔴 Escalate: Any IP targeting >25 Entra users OR >100 endpoint failures from a single IP
+- 🟠 Investigate: Any spray/brute-force pattern detected (meets thresholds)
+- ✅ Clear: 0 results — no spray/brute-force patterns detected
+
+**Drill-down:** Use `user-investigation` skill for targeted users, `ioc-investigation` for source IPs.
 
 ---
 
-### Query 6: Internet-Facing Critical Assets with Vulnerability Exposure
-
-🛡️ **Attack surface** — ExposureGraph snapshot of critical assets, flagging internet exposure and RCE/PrivEsc vulnerabilities.
-
-**Tool:** `RunAdvancedHuntingQuery`
-
-```kql
-ExposureGraphNodes
-| where set_has_element(Categories, "device")
-| extend rawData = parse_json(tostring(parse_json(tostring(NodeProperties)).rawData))
-| extend critLevel = toint(rawData.criticalityLevel.criticalityLevel)
-| where isnotnull(critLevel) and critLevel < 4
-| extend IsInternetFacing = tobool(rawData.IsInternetFacing) or tobool(rawData.exposedToInternet)
-| extend VulnRCE = tobool(rawData.highRiskVulnerabilityInsights.vulnerableToRemoteCodeExecution)
-| extend VulnPrivEsc = tobool(rawData.highRiskVulnerabilityInsights.VulnerableToPrivilegeEscalation)
-| project 
-    DeviceName = NodeName,
-    CriticalityLevel = critLevel,
-    IsInternetFacing,
-    VulnRCE,
-    VulnPrivEsc,
-    NodeLabel
-| order by IsInternetFacing desc, CriticalityLevel asc
-| take 25
-```
-
-**Purpose:** Returns the critical asset inventory (criticality 0–3) with internet-facing status and vulnerability flags. An internet-facing critical asset with RCE vulnerability is the highest-priority finding in this entire skill.
-
-**Verdict logic:**
-- 🔴 Escalate: Any `IsInternetFacing == true` AND (`VulnRCE == true` or `VulnPrivEsc == true`)
-- 🟠 Investigate: Any `IsInternetFacing == true` (without known vulns)
-- 🟡 Monitor: Critical assets exist but none internet-facing
-- ✅ Clear: All critical assets properly segmented, no internet exposure
-
----
-
-### Query 7: SPN Behavioral Drift (90d Baseline vs 7d Recent)
+### Query 5: SPN Behavioral Drift (90d Baseline vs 7d Recent)
 
 🤖 **Automation monitoring** — Composite drift score across 5 dimensions for service principals.
 
@@ -455,6 +480,89 @@ RC | join kind=inner BL on ServicePrincipalId
 
 ---
 
+### Query 6: Fleet-Wide Device Process Drift
+
+💻 **Endpoint behavioral baseline** — Per-device drift scores computed in-query (7d baseline vs 1d recent), returned pre-ranked.
+
+**Tool:** `RunAdvancedHuntingQuery`
+
+```kql
+DeviceProcessEvents
+| where Timestamp > ago(7d)
+| extend IsRecent = Timestamp >= ago(1d)
+| summarize
+    BL_Events = countif(not(IsRecent)),
+    RC_Events = countif(IsRecent),
+    BL_Procs = dcountif(FileName, not(IsRecent)),
+    RC_Procs = dcountif(FileName, IsRecent),
+    BL_Accts = dcountif(AccountName, not(IsRecent)),
+    RC_Accts = dcountif(AccountName, IsRecent),
+    BL_Chains = dcountif(strcat(InitiatingProcessFileName, "→", FileName), not(IsRecent)),
+    RC_Chains = dcountif(strcat(InitiatingProcessFileName, "→", FileName), IsRecent),
+    BL_Comps = dcountif(ProcessVersionInfoCompanyName, not(IsRecent)),
+    RC_Comps = dcountif(ProcessVersionInfoCompanyName, IsRecent)
+    by DeviceName
+| where RC_Events > 0 and BL_Events > 0
+| extend
+    VolDrift = round(RC_Events * 600.0 / max_of(BL_Events, 1), 0),
+    ProcDrift = round(RC_Procs * 100.0 / max_of(BL_Procs, 1), 0),
+    AcctDrift = round(RC_Accts * 100.0 / max_of(BL_Accts, 1), 0),
+    ChainDrift = round(RC_Chains * 100.0 / max_of(BL_Chains, 1), 0),
+    CompDrift = round(RC_Comps * 100.0 / max_of(BL_Comps, 1), 0)
+| extend DriftScore = round(VolDrift * 0.30 + ProcDrift * 0.25 + AcctDrift * 0.15 + ChainDrift * 0.20 + CompDrift * 0.10, 0)
+| order by DriftScore desc
+| take 10
+| project DeviceName, DriftScore, VolDrift, ProcDrift, AcctDrift, ChainDrift, CompDrift
+```
+
+**Purpose:** Returns the top 10 devices ranked by composite drift score, pre-computed in KQL. No LLM-side math required — just interpret the returned scores.
+
+**Drift formula notes:**
+- **Volume (`VolDrift`):** `RC_Events * 600 / BL_Events` — multiplies recent by 600 (= 100 × 6 baseline days) to normalize to a per-day rate before computing the percentage. This is the only metric that needs time normalization because event counts scale linearly with time.
+- **Dcount metrics (`ProcDrift`, `AcctDrift`, `ChainDrift`, `CompDrift`):** `RC_Dim * 100 / BL_Dim` — compared directly WITHOUT dividing baseline by 6. Distinct counts do NOT scale linearly with time (seeing 4 unique accounts over 6 days ≠ 0.67 accounts/day). The 6-day baseline captures the "universe" of distinct values; a single day shows what fraction was active. 100% = normal, >100% = new values appeared.
+- **Weights:** Volume 30%, Processes 25%, Chains 20%, Accounts 15%, Companies 10%.
+
+**Verdict logic:**
+- 🔴 Escalate: Any device with `DriftScore > 250` (major anomaly)
+- 🟠 Investigate: Any device with `DriftScore 150–250` (significant deviation)
+- 🟡 Monitor: Any device with `DriftScore 120–150` (minor behavioral expansion)
+- ✅ Clear: All devices within 80–120 (stable), or fleet is uniform (all scores within 20 points of each other — downgrade one level per fleet-uniformity rule)
+- 🔵 Informational: Any device with `DriftScore < 80` (contracting activity — may be idle/decommissioned)
+
+---
+
+### Query 7: Rare Process Chain Singletons
+
+💻 **Threat hunting** — Parent→child process combinations appearing fewer than 3 times in 90 days.
+
+**Tool:** `RunAdvancedHuntingQuery`
+
+```kql
+DeviceProcessEvents
+| where Timestamp > ago(90d)
+| summarize 
+    Count = count(),
+    UniqueDevices = dcount(DeviceName),
+    SampleDevice = take_any(DeviceName),
+    SampleUser = strcat(take_any(AccountDomain), "\\", take_any(AccountName)),
+    SampleChildCmd = take_any(ProcessCommandLine),
+    GrandparentProcess = take_any(InitiatingProcessParentFileName),
+    LastSeen = max(Timestamp)
+    by ParentProcess = InitiatingProcessFileName, ChildProcess = FileName
+| where Count < 3
+| order by Count asc, UniqueDevices asc
+| take 20
+```
+
+**Purpose:** Surfaces the 20 rarest process chains — singletons and near-singletons. Effective for spotting LOLBin abuse, malware execution, or novel attack tooling. Review `SampleChildCmd` for suspicious command-line patterns.
+
+**Verdict logic:**
+- 🟠 Investigate: Any singleton with suspicious parent (cmd.exe, powershell.exe, wscript.exe, mshta.exe, rundll32.exe) or child running from temp/user profile directories
+- 🟡 Monitor: Rare chains from system/update processes (version-stamped binaries, Azure VM agents)
+- ✅ Clear: All rare chains are explainable infrastructure artifacts
+
+---
+
 ### Query 8: Inbound Email Threat Snapshot
 
 📧 **Email posture** — Single-row summary of inbound email volume, threat breakdown, and delivered threats.
@@ -491,108 +599,46 @@ EmailEvents
 
 ---
 
-### Query 9: UEBA/MCAS Behavioral Detections
+### Query 9: Cloud App Suspicious Activity
 
-📈 **Sub-alert signals** — Behavioral detections from MCAS and Sentinel UEBA that didn't generate alerts.
+🔑 **Cloud ops monitoring** — Detects mailbox rule manipulation, transport rule changes, mailbox delegation, Copilot interactions, and programmatic mailbox access via CloudAppEvents.
 
 **Tool:** `RunAdvancedHuntingQuery`
 
-**⚠️ Two-stage query pattern:** The original single-query join (`BehaviorInfo ↔ BehaviorEntities` with `make_set(strcat(coalesce(...)))`) times out via the Advanced Hunting Graph API (~30s limit) on workspaces with moderate-to-high behavior volume. The fix: **Stage 1** queries `BehaviorInfo` alone for the summary dashboard. **Stage 2** (optional, only if Stage 1 returns 🟠/🔴 findings) queries `BehaviorEntities` for specific `BehaviorId` values to enrich the report with entity details.
-
-**Stage 1 — Summary (always run):**
-
 ```kql
-BehaviorInfo
+CloudAppEvents
 | where Timestamp > ago(7d)
-| summarize 
-    DetectionCount = count(),
-    DateRange = strcat(format_datetime(min(Timestamp), "yyyy-MM-dd"), " to ", format_datetime(max(Timestamp), "yyyy-MM-dd"))
-    by ActionType, ServiceSource
-| order by DetectionCount desc
-| take 15
-```
-
-**Stage 2 — Entity enrichment (run only for flagged ActionTypes):**
-
-```kql
-let FlaggedBehaviors = BehaviorInfo
-| where Timestamp > ago(7d)
-| where ActionType in ("UnusualAdditionOfCredentialsToAnOauthApp", "ImpossibleTravelActivity", "MassDownload")
-| project BehaviorId;
-BehaviorEntities
-| where Timestamp > ago(7d)
-| where BehaviorId in (FlaggedBehaviors)
-| where EntityType in ("User", "Ip", "CloudApplication")
-| summarize 
-    Entities = make_set(
-        strcat(EntityType, ":", coalesce(AccountUpn, AccountName, RemoteIP, Application, DeviceName, "")), 5)
-    by BehaviorId
+| where ActionType in (
+    "New-InboxRule", "Set-InboxRule",
+    "Set-Mailbox",
+    "Add-MailboxPermission",
+    "New-TransportRule", "Set-TransportRule",
+    "New-Mailbox",
+    "CopilotInteraction",
+    "MailItemsAccessed"
+)
+| summarize
+    Count = count(),
+    LatestTime = max(Timestamp),
+    SampleTargets = make_set(ObjectName, 3)
+    by ActionType, AccountDisplayName
+| order by Count desc
 | take 20
 ```
 
-**Purpose:** Surfaces MCAS behavioral signals below the alert threshold — impossible travel, mass downloads, unusual OAuth credential additions, multi-failed logins. These are early-warning indicators that complement SecurityAlert. The two-stage design keeps Stage 1 fast (<5s) and avoids the expensive cross-table join unless specific high-priority behaviors are detected.
+**Purpose:** Surfaces cloud app activity that Q10 (AuditLogs) cannot see — mailbox rule creation/modification (T1114.003 email exfiltration via forwarding), transport rule changes (org-wide mail routing manipulation), mailbox permission grants (delegate access abuse), Copilot interactions, and `MailItemsAccessed` (programmatic/API mailbox access distinct from normal email reading — a key indicator of OAuth app abuse or token theft accessing mailbox content via Graph/EWS).
 
 **Verdict logic:**
-- 🟠 Investigate: `UnusualAdditionOfCredentialsToAnOauthApp` or `ImpossibleTravelActivity` detected → run Stage 2
-- 🟡 Monitor: `MultipleFailedLoginAttempts` or `MassDownload` detected → run Stage 2
-- ✅ Clear: No behavioral detections (or MCAS/UEBA not deployed — note as ❓)
+- 🔴 Escalate: `New-InboxRule` or `Set-InboxRule` with forwarding targets to external domains; `MailItemsAccessed` from unexpected accounts (non-service, non-admin)
+- 🟠 Investigate: Any `New-TransportRule` / `Set-TransportRule` (org-wide impact); `Add-MailboxPermission` from non-admin accounts; high-volume `MailItemsAccessed`
+- 🟡 Monitor: `CopilotInteraction` activity (informational); `Set-Mailbox` changes
+- ✅ Clear: 0 results — none of these high-signal operations occurred
 
-**Known limitation:** `BehaviorEntities` does not have an `EntityName` column. Use `AccountUpn`, `AccountName`, `RemoteIP`, `Application`, or `DeviceName` depending on `EntityType`. The `coalesce()` pattern in Stage 2 handles this. Some `ActionType` values from MDE appear as GUIDs rather than human-readable names — report them as-is with the ServiceSource for context.
+**Drill-down:** Use `user-investigation` skill for actors performing suspicious mailbox operations.
 
 ---
 
-### Query 10: Password Spray / Brute-Force Detection
-
-🔐 **Auth spray detection (T1110.003 / T1110.001)** — Identifies IPs targeting multiple users with failed auth across Entra ID cloud sign-ins AND RDP/SSH/network logons on endpoints.
-
-**Tool:** `RunAdvancedHuntingQuery`
-
-```kql
-let EntraSpray = SigninLogs
-| where TimeGenerated > ago(7d)
-| where ResultType in ("50126", "50053", "50057")
-| summarize
-    FailedAttempts = count(),
-    TargetUsers = dcount(UserPrincipalName),
-    SampleTargets = make_set(UserPrincipalName, 5),
-    Protocols = make_set(AppDisplayName, 3),
-    Countries = make_set(Location, 3)
-    by SourceIP = IPAddress
-| where TargetUsers >= 5
-| extend Surface = "Entra ID";
-let EndpointBrute = DeviceLogonEvents
-| where Timestamp > ago(7d)
-| where ActionType == "LogonFailed"
-| where LogonType in ("RemoteInteractive", "Network")
-| where isnotempty(RemoteIP)
-| summarize
-    FailedAttempts = count(),
-    TargetUsers = dcount(AccountName),
-    SampleTargets = make_set(AccountName, 5),
-    Protocols = make_set(strcat(LogonType, " → ", DeviceName), 3),
-    Countries = dynamic(["—"])
-    by SourceIP = RemoteIP
-| where FailedAttempts >= 10
-| extend Surface = "Endpoint (RDP/SSH)";
-union EntraSpray, EndpointBrute
-| order by TargetUsers desc, FailedAttempts desc
-| take 15
-```
-
-**Purpose:** Detects password spray (1 IP → many users, MITRE T1110.003) and brute-force (1 IP → high failure count, T1110.001) across two surfaces:
-- **Entra ID:** Cloud sign-in failures (50126=bad password, 50053=locked account, 50057=disabled account). An IP targeting ≥5 distinct users with these errors is a strong spray signal. `Protocols` reveals if legacy auth (POP/IMAP/SMTP) is being targeted.
-- **Endpoint:** RDP (`RemoteInteractive`) and SSH/SMB (`Network`) failed logons on MDE-enrolled devices. Threshold of ≥10 failures catches brute-force against exposed endpoints.
-
-**Verdict logic:**
-- 🔴 Escalate: Any IP targeting >25 Entra users OR >100 endpoint failures from a single IP
-- 🟠 Investigate: Any spray/brute-force pattern detected (meets thresholds)
-- ✅ Clear: 0 results — no spray/brute-force patterns detected
-
-**Drill-down:** Use `user-investigation` skill for targeted users, `ioc-investigation` for source IPs.
-
----
-
-### Query 11: High-Impact Privileged Operations
+### Query 10: High-Impact Privileged Operations
 
 🔑 **Admin activity monitoring** — Recent high-privilege operations: role assignments, credential additions, consent grants, CA policy changes, password resets.
 
@@ -621,6 +667,42 @@ AuditLogs
 - 🟠 Investigate: Unexpected user appearing as Actor; high-volume single-user operations
 - 🟡 Monitor: Normal PIM/system operations; expected admin activity
 - ✅ Clear: Only system-driven operations with expected volume
+
+---
+
+### Query 11: Internet-Facing Critical Assets with Vulnerability Exposure
+
+🛡️ **Attack surface** — ExposureGraph snapshot of critical assets, flagging internet exposure and RCE/PrivEsc vulnerabilities.
+
+**Tool:** `RunAdvancedHuntingQuery`
+
+```kql
+ExposureGraphNodes
+| where set_has_element(Categories, "device")
+| extend rawData = parse_json(tostring(parse_json(tostring(NodeProperties)).rawData))
+| extend critLevel = toint(rawData.criticalityLevel.criticalityLevel)
+| where isnotnull(critLevel) and critLevel < 4
+| extend IsInternetFacing = tobool(rawData.IsInternetFacing) or tobool(rawData.exposedToInternet)
+| extend VulnRCE = tobool(rawData.highRiskVulnerabilityInsights.vulnerableToRemoteCodeExecution)
+| extend VulnPrivEsc = tobool(rawData.highRiskVulnerabilityInsights.VulnerableToPrivilegeEscalation)
+| project 
+    DeviceName = NodeName,
+    CriticalityLevel = critLevel,
+    IsInternetFacing,
+    VulnRCE,
+    VulnPrivEsc,
+    NodeLabel
+| order by IsInternetFacing desc, CriticalityLevel asc
+| take 25
+```
+
+**Purpose:** Returns the critical asset inventory (criticality 0–3) with internet-facing status and vulnerability flags. An internet-facing critical asset with RCE vulnerability is the highest-priority finding in this entire skill.
+
+**Verdict logic:**
+- 🔴 Escalate: Any `IsInternetFacing == true` AND (`VulnRCE == true` or `VulnPrivEsc == true`)
+- 🟠 Investigate: Any `IsInternetFacing == true` (without known vulns)
+- 🟡 Monitor: Critical assets exist but none internet-facing
+- ✅ Clear: All critical assets properly segmented, no internet exposure
 
 ---
 
@@ -658,9 +740,9 @@ DeviceTvmSoftwareVulnerabilities
 
 ## Post-Processing
 
-### Device Drift Score Interpretation (Q4)
+### Device Drift Score Interpretation (Q6)
 
-Q4 returns pre-computed drift scores directly from KQL — **no LLM-side math is needed**. Simply present the returned table and apply verdicts using this scale:
+Q6 returns pre-computed drift scores directly from KQL — **no LLM-side math is needed**. Simply present the returned table and apply verdicts using this scale:
 
 | DriftScore | Interpretation | Verdict |
 |------------|---------------|--------|
@@ -681,10 +763,12 @@ After all queries complete, check these correlation patterns and escalate priori
 | Pattern | Queries | Implication | Action |
 |---------|---------|-------------|--------|
 | Same user in anomalies AND risky sign-ins | Q2 + Q3 | Corroborated identity compromise signal | Escalate to 🔴 |
-| SPN drift AND unusual OAuth credential addition | Q7 + Q9 | App credential abuse / persistence | Escalate to 🔴 |
-| Device with rare process chain AND exploitable CVE | Q5 + Q12 | Potential active exploitation | Escalate to 🔴 |
+| SPN drift AND unusual credential/consent activity | Q5 + Q9 | App credential abuse / persistence | Escalate to 🔴 |
+| Device with rare process chain AND exploitable CVE | Q7 + Q12 | Potential active exploitation | Escalate to 🔴 |
 | Incident entity matches anomaly/risk user | Q1 + Q2/Q3 | Known incident may be expanding | Link findings in report |
-| Spray IP overlaps with anomaly/risk user | Q10 + Q2/Q3 | Spray target already flagged by Identity Protection | Escalate to 🔴 |
+| Closed TP tactics match active findings | Q1b + Q2/Q3/Q7/Q8 | Same attack pattern recurring despite recent closures | Escalate to 🟠, note recurrence |
+| Spray IP overlaps with anomaly/risk user | Q4 + Q2/Q3 | Spray target already flagged by Identity Protection | Escalate to 🔴 |
+| Mailbox rule manipulation AND email threats | Q9 + Q8 | Potential email exfiltration setup following phishing | Escalate to 🔴 |
 
 ---
 
@@ -698,14 +782,14 @@ Extract search keywords deterministically from 🔴/🟠 findings:
 
 | Finding Source | Keywords to Extract |
 |---------------|--------------------|
-| Q1 (Incidents) | MITRE tactic names from `Tactics` column (e.g., "lateral movement", "credential access"), alert titles |
-| Q2/Q2b (Identity) | "anomaly", "sign-in", "identity", "phishing" if geo-novelty flags set |
+| Q1/Q1b (Incidents) | MITRE tactic names from Q1 `Tactics` column AND Q1b closed TP tactics (e.g., "lateral movement", "credential access"), alert titles |
+| Q2/Q2b (Identity Anomalies) | "anomaly", "sign-in", "identity", "phishing" if geo-novelty flags set |
 | Q3 (Identity Protection) | "risky sign-in", "token", "aitm", "phishing" if risk detail contains these |
-| Q5 (Rare Processes) | Process names from singleton chains (e.g., "mimikatz", "rclone", "psexec"), "rare process" |
-| Q7 (SPN Drift) | "service principal", "app registration", "credential" |
+| Q4 (Auth Spray) | "brute force", "password spray", "RDP", "credential" |
+| Q5 (SPN Drift) | "service principal", "app registration", "credential" |
+| Q7 (Rare Processes) | Process names from singleton chains (e.g., "mimikatz", "rclone", "psexec"), "rare process" |
 | Q8 (Email) | "phishing", "email", "spam", "malware" if delivered threats > 0 |
-| Q9 (UEBA) | ActionType values (e.g., "impossible travel", "mass download", "brute force") |
-| Q10 (Auth Spray) | "brute force", "password spray", "RDP", "credential" |
+| Q9 (Cloud App Ops) | ActionType values from CloudAppEvents (e.g., "New-InboxRule", "MailItemsAccessed", "New-TransportRule") |
 | Q12 (CVEs) | Specific CVE IDs from results, software names from `SoftwareName` column |
 
 ### Search Procedure
@@ -713,24 +797,30 @@ Extract search keywords deterministically from 🔴/🟠 findings:
 1. Collect keywords from all 🔴/🟠 domains using the extraction rules above
 2. Run `grep_search` with each keyword (or combined with `|` alternation) scoped to `queries/**`
 3. Deduplicate matched files — a file matching multiple keywords ranks higher
-4. Read the first 10 lines of each matched file to extract the title and description from the metadata header
+4. Read the first 10 lines of each matched file to extract the `# Title` from line 1 of the metadata header — this becomes the clickable link display text
 5. Select the **top 3–5 most relevant** files, ranked by number of keyword matches
+6. **Format each file as a clickable markdown link:** `[<Title from step 4>](queries/<subfolder>/<filename>.md)` — plain text or backtick-wrapped paths are PROHIBITED
 
 ### Report Output Block
 
-Insert this section between **Recommended Actions** and **Appendix** in both inline and file reports:
+Insert this section between **Recommended Actions** and **Appendix** in both inline and file reports.
+
+**⛔ CRITICAL: Use numbered list format, NOT a table.** Markdown links inside table cells do not render as clickable in VS Code chat. The numbered list format below is the ONLY permitted layout.
 
 ```markdown
 ## 📂 Recommended Query Files for Follow-Up Hunting
 
 <If matching query files found:>
 
-Based on today's findings, these query files contain pre-built hunting campaigns targeting related TTPs and IOCs:
+Based on today's findings, these query files contain pre-built hunting campaigns targeting related TTPs:
 
-| Query File | Relevance | Matched Findings |
-|-----------|-----------|------------------|
-| [<Title>](queries/<subfolder>/<filename>.md) | <matched keywords> | Q<N>: <finding summary> |
-| ... | ... | ... |
+1. **[<Title>](queries/<subfolder>/<filename>.md)**
+   — Q<N>: <finding summary>
+
+2. **[<Title>](queries/<subfolder>/<filename>.md)**
+   — Q<N>: <finding summary>
+
+...
 
 > 💡 **Follow-up prompt:** Open a query file above and ask:
 > *"Run a hunting campaign against these TTPs and IOCs and summarize any key findings"*
@@ -741,7 +831,26 @@ Based on today's findings, these query files contain pre-built hunting campaigns
 > *"Read this threat intel article: <URL> — extract TTPs and IOCs, then write, test, and tune a queries file for reusable threat hunts"*
 ```
 
-**Link format:** Use workspace-relative paths — `queries/endpoint/storm_1175_medusa_ransomware_campaign.md` — so links are clickable in VS Code chat.
+### 🔴 MANDATORY: Clickable File Links
+
+**Every query file reference in this section MUST be a clickable markdown link using workspace-relative paths.** The user needs to click the link to instantly add the file as context in a follow-up chat.
+
+**⛔ NEVER use a markdown table for this section.** Links inside table cells do not render as clickable in VS Code chat. Always use a **numbered list** with bold link text and a description line underneath.
+
+| Requirement | Example |
+|-------------|---------|
+| **Correct** — numbered list with bold link | `1. **[Rare Parent–Child Process Chain Detection](queries/endpoint/rare_process_chains.md)**` followed by `   — Q5: singleton process chains` on next line |
+| ❌ **PROHIBITED** — table with link | `\| [Title](path) \| relevance \| findings \|` |
+| ❌ **PROHIBITED** — plain text file name | `queries/endpoint/rare_process_chains.md` |
+| ❌ **PROHIBITED** — backtick-wrapped file name | `` `queries/endpoint/rare_process_chains.md` `` |
+| ❌ **PROHIBITED** — title without link | `Rare Parent–Child Process Chain Detection` |
+
+**Rules:**
+- Link display text = the file's `# Title` from line 1 of the metadata header
+- Link target = workspace-relative path (e.g., `queries/endpoint/rare_process_chains.md`)
+- Use forward slashes `/` only — no backslashes
+- The link MUST render as clickable in VS Code chat so the user can open the file in one click
+- If Step 4 of the Search Procedure reads the file title, use that exact title as the display text
 
 ---
 
@@ -777,7 +886,7 @@ Render the following sections in order. Omit sections only if explicitly noted a
 
 **Generated:** <YYYY-MM-DD HH:MM> UTC
 **Workspace:** <WorkspaceName> (`<WorkspaceId>`)
-**Scan Duration:** ~<N>s | **Queries:** 12 | **Domains:** 9
+**Scan Duration:** ~<N>s | **Queries:** 13 | **Domains:** 9
 
 ---
 
@@ -785,17 +894,17 @@ Render the following sections in order. Omit sections only if explicitly noted a
 
 | # | Domain | Status | Key Finding |
 |---|--------|--------|-------------|
-| Q1 | 🔴 **Incidents** | <verdict> | <1-line finding> |
+| Q1 | 🔴 **Incidents** | <verdict> | <1-line finding — includes Q1b closed summary context> |
 | Q2 | 🔐 **Sign-In Anomalies** | <verdict> | <1-line finding> |
 | Q3 | 🔐 **Identity Protection** | <verdict> | <1-line finding> |
-| Q4 | 💻 **Device Drift** | <verdict> | <1-line finding> |
-| Q5 | 💻 **Rare Processes** | <verdict> | <1-line finding> |
-| Q6 | 🛡️ **Critical Assets** | <verdict> | <1-line finding> |
-| Q7 | 🤖 **SPN Drift** | <verdict> | <1-line finding> |
+| Q4 | � **Auth Spray** | <verdict> | <1-line finding> |
+| Q5 | 🤖 **SPN Drift** | <verdict> | <1-line finding> |
+| Q6 | 💻 **Device Drift** | <verdict> | <1-line finding> |
+| Q7 | 💻 **Rare Processes** | <verdict> | <1-line finding> |
 | Q8 | 📧 **Email Threats** | <verdict> | <1-line finding> |
-| Q9 | 📈 **UEBA Behaviors** | <verdict> | <1-line finding> |
-| Q10 | � **Auth Spray** | <verdict> | <1-line finding> |
-| Q11 | 🔑 **Privileged Ops** | <verdict> | <1-line finding> |
+| Q9 | 🔑 **Cloud App Ops** | <verdict> | <1-line finding> |
+| Q10 | 🔑 **Privileged Ops** | <verdict> | <1-line finding> |
+| Q11 | 🛡️ **Critical Assets** | <verdict> | <1-line finding> |
 | Q12 | 🛡️ **Exploitable CVEs** | <verdict> | <1-line finding> |
 
 <Where verdict is one of: 🔴 Escalate | 🟠 Investigate | 🟡 Monitor | ✅ Clear | ❓ No Data>
@@ -819,6 +928,23 @@ Render the following sections in order. Omit sections only if explicitly noted a
 | Incident | Title | Age (days) | Alerts | Owner | Tactics |
 
 Where **Incident** renders the XDR portal link: `[XDR #<ProviderIncidentId>](https://security.microsoft.com/incidents/<ProviderIncidentId>)`. Do NOT use raw `ProviderIncidentId` as a column header — always display as `Incident`. Unassigned incidents show `⚠️ Unassigned` in the Owner column.
+
+**Q1b closed summary (always render after Q1 results, even when Q1 is ✅ Clear):**
+
+**7-Day Closed Incident Summary** (<Total> closed)
+
+| Classification | Count |
+|---|---|
+| TruePositive | <N> |
+| BenignPositive | <N> |
+| FalsePositive | <N> |
+| Undetermined | <N> |
+
+**Severity:** <HighCritical> High/Critical, <MediumLow> Medium/Low
+**Active MITRE Tactics (from TP closures):** <comma-separated tactic names, or "None" if 0 TPs>
+
+<If 0 closed incidents in 7d:>
+No incidents closed in the last 7 days.
 
 <Contextual analysis with emoji-coded risk assessment>
 
@@ -867,17 +993,18 @@ Where **Incident** renders the XDR portal link: `[XDR #<ProviderIncidentId>](htt
 
 | Query | Domain | Records | Data Source | Notes |
 |-------|--------|---------|-------------|-------|
-| Q1 | Incidents | <N> | Data Lake | |
+| Q1 | Incidents (open) | <N> | Data Lake | |
+| Q1b | Incidents (closed 7d) | <N> | Data Lake | Classification: <TP/BP/FP/Undetermined counts> |
 | Q2/Q2b | Identity Anomalies | <N> | Data Lake | <"Custom table" or "Identity Protection fallback"> |
 | Q3 | Identity Protection | <N> | Data Lake | |
-| Q4 | Device Drift | 10 | Advanced Hunting | Pre-ranked top 10 by DriftScore |
-| Q5 | Rare Processes | <N> | Advanced Hunting | |
-| Q6 | Critical Assets | <N> | Advanced Hunting | <N internet-facing> |
-| Q7 | SPN Drift | <N> | Data Lake | <N SPNs above threshold> |
+| Q4 | Auth Spray | <N> | Advanced Hunting | Entra ID + Endpoint surfaces |
+| Q5 | SPN Drift | <N> | Data Lake | <N SPNs above threshold> |
+| Q6 | Device Drift | 10 | Advanced Hunting | Pre-ranked top 10 by DriftScore |
+| Q7 | Rare Processes | <N> | Advanced Hunting | |
 | Q8 | Email Threats | 1 | Advanced Hunting | Single-row aggregate |
-| Q9 | UEBA Behaviors | <N> | Advanced Hunting | |
-| Q10 | Auth Spray | <N> | Advanced Hunting | Entra ID + Endpoint surfaces |
-| Q11 | Privileged Ops | <N> | Data Lake | |
+| Q9 | Cloud App Ops | <N> | Advanced Hunting | CloudAppEvents suspicious activity |
+| Q10 | Privileged Ops | <N> | Data Lake | |
+| Q11 | Critical Assets | <N> | Advanced Hunting | <N internet-facing> |
 | Q12 | Exploitable CVEs | <N> | Advanced Hunting | |
 ````
 
@@ -906,15 +1033,14 @@ Include the following additional sections in the file report that are omitted fr
 |---------|--------|------------|
 | `Signinlogs_Anomalies_KQL_CL` doesn't exist | Q2 fails | Silently fall back to Q2b (Identity Protection) |
 | `SecurityAlert.Status` is always "New" | Misleading incident triage | Q1 joins SecurityIncident for real Status |
-| `BehaviorEntities` has no `EntityName` column | Q9 fails with SemanticError | Use `coalesce(AccountUpn, AccountName, RemoteIP, Application, DeviceName)` |
-| Q9 join (`BehaviorInfo ↔ BehaviorEntities`) times out via AH Graph API | User cancellation / ~30s timeout on 30d join with `make_set(strcat(coalesce(...)))` | Two-stage pattern: Stage 1 queries BehaviorInfo alone (7d); Stage 2 enriches specific BehaviorIds only when 🟠/🔴 findings exist |
-| Q9 `ActionType` values from MDE appear as GUIDs | Dashboard shows opaque IDs instead of human-readable names | Report GUIDs as-is with ServiceSource; only MCAS behaviors use readable names (e.g., `ImpossibleTravelActivity`) |
-| `ExposureGraphNodes.NodeProperties` requires double `parse_json()` | Null values if single parse | Q6 uses `parse_json(tostring(parse_json(...)))` pattern |
-| Q7 (SPN drift) takes ~35s due to 97d lookback | Slow query | Acceptable — runs in parallel with other Data Lake queries |
+| `BehaviorInfo` / `BehaviorEntities` trigger AH MCP safety filter | Q9 query cancelled by tool | Replaced with `CloudAppEvents` query — BehaviorInfo tables removed from skill |
+| `ExposureGraphNodes.NodeProperties` requires double `parse_json()` | Null values if single parse | Q11 uses `parse_json(tostring(parse_json(...)))` pattern |
+| Q5 (SPN drift) takes ~35s due to 97d lookback | Slow query | Acceptable — runs in parallel with other Data Lake queries |
 | `DeviceTvmSoftwareVulnerabilities` is AH-only | Data Lake returns "table not found" | Q12 must use `RunAdvancedHuntingQuery` |
 | `EmailEvents` uses `Timestamp` not `TimeGenerated` | SemanticError if wrong column | Q8 uses `Timestamp` (XDR-native table) |
-| `AuditLogs.InitiatedBy` is a dynamic field | `has` operator fails without `tostring()` | Q11 uses `parse_json(tostring(...))` pattern |
-| Q4 drift scores | Previously required LLM-side math, causing reasoning overhead | Drift scores now computed in-query; LLM only interprets returned `DriftScore` column |
+| `CloudAppEvents` uses `Timestamp` in AH, `TimeGenerated` in Data Lake | SemanticError if wrong column | Q9 uses `Timestamp` (AH execution) |
+| `AuditLogs.InitiatedBy` is a dynamic field | `has` operator fails without `tostring()` | Q10 uses `parse_json(tostring(...))` pattern |
+| Q6 drift scores | Previously required LLM-side math, causing reasoning overhead | Drift scores now computed in-query; LLM only interprets returned `DriftScore` column |
 
 ---
 
@@ -922,31 +1048,28 @@ Include the following additional sections in the file report that are omitted fr
 
 Before rendering the final report, verify:
 
-- [ ] All 12 queries executed (or fallback used for Q2)
+- [ ] All 13 queries executed (Q1 + Q1b + Q2–Q12, or fallback used for Q2)
 - [ ] Every domain has a verdict row in the Dashboard Summary (no omissions)
 - [ ] Every ✅ Clear verdict cites the specific table queried and "0 results"
 - [ ] Every 🔴/🟠 verdict cites specific evidence (counts, names, scores)
 - [ ] All incidents include clickable `https://security.microsoft.com/incidents/{ProviderIncidentId}` URLs
-- [ ] Cross-query correlations checked (minimum: Q2+Q3 user overlap, Q7+Q9 SPN+OAuth overlap)
+- [ ] Cross-query correlations checked (minimum: Q2+Q3 user overlap, Q5+Q9 SPN+CloudApp overlap, Q9+Q8 mailbox+email overlap, Q1b tactics vs active findings)
 - [ ] Recommended Actions table includes at least 1 item per 🔴/🟠 domain
 - [ ] Each recommendation references a specific drill-down skill
 - [ ] Q2b fallback noted in report if custom table was unavailable
 - [ ] No fabricated data — all findings trace to actual query results
-- [ ] Query file recommendations searched for 🔴/🟠 domains (or section omitted if all ✅/🟡)
+- [ ] **⛔ Query file recommendations:** If ANY verdict is 🔴 or 🟠, the `📂 Recommended Query Files` section MUST appear in the report with at least one matched file or the "no matching files" template. Rendering a report with 🔴/🟠 verdicts but NO query file recommendations section is **PROHIBITED**.
+- [ ] **⛔ Query file links are clickable:** Every query file in the `📂 Recommended Query Files` table MUST be a clickable markdown link `[Title](queries/subfolder/file.md)` — NOT plain text, NOT backtick-wrapped. The user must be able to click the link to open the file and add it as context to a follow-up chat.
 
 ---
 
 ## SVG Dashboard Generation
 
-After completing the Threat Pulse report, the user may request an SVG visualization. Use the `svg-dashboard` skill in **freeform mode** with this data mapping:
+After completing the Threat Pulse report, the user may request an SVG visualization. Use the `svg-dashboard` skill in **manifest mode** — the widget manifest is at `.github/skills/threat-pulse/svg-widgets.yaml`.
 
-| SVG Component | Data Source |
-|---------------|-------------|
-| **KPI Cards (top row)** | Total incidents (Q1), Risky users (Q3), Phish delivered (Q8), Exploitable CVEs (Q12) |
-| **Score Card** | Not applicable (Threat Pulse doesn't compute a single composite score) |
-| **Donut Chart** | Email threat composition: Clean/Phish/Spam/Malware from Q8 |
-| **Bar Chart** | SPN drift scores from Q7 (top 5 SPNs) |
-| **Table** | Dashboard Summary verdicts (12 rows) |
-| **Recommendation Cards** | Top 3 recommended actions |
+### Execution
 
-Refer to the `svg-dashboard` SKILL.md for component specifications and rendering instructions.
+1. Read `svg-widgets.yaml` (widget manifest)
+2. Read the `svg-dashboard` SKILL.md for component rendering rules
+3. Map manifest `field` values to the Threat Pulse report data already in context (or read the saved report file)
+4. Render SVG → save to `temp/threat_pulse_{date}_dashboard.svg`

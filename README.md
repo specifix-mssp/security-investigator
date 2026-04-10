@@ -34,7 +34,7 @@ copy .vscode\mcp.json.template .vscode\mcp.json
 #    "Run a threat pulse scan"
 ```
 
-**🚀 Recommended first run:** The **Threat Pulse** skill is the best starting point. It runs a 15-minute broad-spectrum scan across 9 security domains (incidents, identity, endpoint, exposure, email, UEBA, auth spray, privileged ops, CVEs) and produces a prioritized dashboard with color-coded verdicts (🔴 Escalate / 🟠 Investigate / 🟡 Monitor / ✅ Clear). Each finding includes a drill-down recommendation pointing to a specialized skill — so after the scan, you'll know exactly where to focus and which follow-up command to run.
+**🚀 Recommended first run:** The **Threat Pulse** skill is the best starting point. It runs a broad-spectrum scan across 9 security domains (incidents, identity, endpoint, exposure, email, UEBA, auth spray, privileged ops, CVEs) and produces prioritized findings with color-coded verdicts (🔴 Escalate / 🟠 Investigate / 🟡 Monitor / ✅ Clear). Each finding includes a drill-down recommendation pointing to a specialized skill — so after the scan, you'll know exactly where to focus and which follow-up command to run.
 
 **Other example prompts:**
 ```
@@ -104,7 +104,7 @@ This system uses **[VS Code Agent Skills](https://code.visualstudio.com/docs/cop
 
 | Category | Skill | Description | Trigger Keywords |
 |----------|-------|-------------|------------------|
-| ⚡ Quick Scan | **[threat-pulse](/.github/skills/threat-pulse/SKILL.md)** | Rapid 15-minute broad-spectrum security scan across 9 domains: active incidents, identity anomalies, risky sign-ins, device process drift, rare process chains, critical asset exposure, SPN drift, email threats, UEBA behaviors, auth spray, privileged ops, exploitable CVEs. Prioritized Threat Pulse Dashboard with color-coded verdicts and drill-down recommendations | "threat pulse", "quick scan", "security pulse", "morning hunt", "what can you do", "where do I start", "what's going on" |
+| ⚡ Quick Scan | **[threat-pulse](/.github/skills/threat-pulse/SKILL.md)** | Rapid broad-spectrum security scan across 9 domains: active incidents, identity anomalies, risky sign-ins, device process drift, rare process chains, critical asset exposure, SPN drift, email threats, UEBA behaviors, auth spray, privileged ops, exploitable CVEs. Prioritized Threat Pulse findings with color-coded verdicts and drill-down recommendations | "threat pulse", "quick scan", "security pulse", "morning hunt", "what can you do", "where do I start", "what's going on" |
 | 🔍 Core Investigation | **[computer-investigation](/.github/skills/computer-investigation/SKILL.md)** | Device security analysis for Entra Joined, Hybrid Joined, and Entra Registered devices: Defender alerts, compliance, logged-on users, vulnerabilities, process/network/file events | "investigate computer", "investigate device", "investigate endpoint", "check machine", hostname |
 | 🔍 Core Investigation | **[honeypot-investigation](/.github/skills/honeypot-investigation/SKILL.md)** | Honeypot security analysis: attack patterns, threat intel, vulnerabilities, executive reports | "honeypot", "attack analysis", "threat actor" |
 | 🔍 Core Investigation | **[incident-investigation](/.github/skills/incident-investigation/SKILL.md)** | Comprehensive incident analysis for Defender XDR and Sentinel incidents: criticality assessment, entity extraction, filtering, recursive entity investigation | "investigate incident", "incident ID", "analyze incident", "triage incident", incident number |
