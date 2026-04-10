@@ -21,7 +21,7 @@ The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the
 | 🔑 **Admin & Cloud Ops** | What mailbox rules, OAuth consents, transport rules, or mailbox permission changes occurred? Who performed high-impact admin operations? |
 | 🛡️ **Exposure** | Are any critical assets internet-facing with RCE vulnerabilities? What exploitable CVEs (CVSS ≥ 8) are present across the fleet? |
 
-**Data sources:** `SecurityIncident`, `SecurityAlert`, `Signinlogs_Anomalies_KQL_CL` (custom, fallback: `SigninLogs`), `SigninLogs`, `DeviceProcessEvents`, `DeviceLogonEvents`, `ExposureGraphNodes`, `AADServicePrincipalSignInLogs`, `EmailEvents`, `CloudAppEvents`, `AuditLogs`, `DeviceTvmSoftwareVulnerabilities`, `DeviceTvmSoftwareVulnerabilitiesKB`
+**Data sources:** `SecurityIncident`, `SecurityAlert`, `Signinlogs_Anomalies_KQL_CL` (custom, fallback: `SigninLogs`), `SigninLogs`, `EntraIdSignInEvents`, `DeviceProcessEvents`, `DeviceLogonEvents`, `ExposureGraphNodes`, `AADServicePrincipalSignInLogs`, `EmailEvents`, `CloudAppEvents`, `AuditLogs`, `DeviceTvmSoftwareVulnerabilities`, `DeviceTvmSoftwareVulnerabilitiesKB`
 
 **References:**
 - [Microsoft Sentinel — SecurityIncident](https://learn.microsoft.com/en-us/azure/sentinel/data-source-schema-reference#securityincident)
@@ -90,13 +90,13 @@ The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the
 
 8. **SecurityIncident output rule** — Every incident MUST include a clickable Defender XDR portal URL: `https://security.microsoft.com/incidents/{ProviderIncidentId}`.
 
-9. **⛔ MANDATORY: Query File Recommendations for 🔴/🟠 verdicts** — After assigning verdicts and BEFORE rendering the final report, check if ANY domain received a 🔴 or 🟠 verdict. If yes, you MUST execute the [Query File Recommendations](#query-file-recommendations) procedure (keyword extraction → `grep_search` in `queries/**` → file matching → include section in report). This is NOT optional. Skipping this step when 🔴/🟠 verdicts exist violates the skill workflow.
+9. **⛔ MANDATORY: Query File Recommendations (tiered)** — After assigning verdicts and BEFORE rendering the final report, execute the [Query File Recommendations](#query-file-recommendations) procedure. Skip only when ALL verdicts are ✅.
 
-| Condition | Required Action |
-|-----------|----------------|
-| Any 🔴 or 🟠 verdict exists | **MUST** run query file search and include `📂 Recommended Query Files` section |
-| All verdicts are ✅ or 🟡 | Omit the section entirely |
-| Query file search returns 0 matches | Include the section with the "no matching files" template |
+| Highest Verdict | Query Files | Proactive Skills | Report Section |
+|----------------|-------------|-----------------|----------------|
+| 🔴 or 🟠 | Top 3–5, entity-specific prompts | — | `📂 Recommended Query Files` |
+| 🟡 (no 🔴/🟠) | Top 1–2, broader prompts | Up to 3 posture skills | `📂 Proactive Hunting Suggestions` |
+| All ✅ | Skip | Skip | Omit entirely |
 
 ---
 
@@ -164,14 +164,16 @@ Estimated time: ~2–4 minutes
 2. Run cross-query correlation checks (see rule 7 above)
 3. Assign verdicts to each domain (🔴 Escalate / 🟠 Investigate / 🟡 Monitor / ✅ Clear)
 4. Generate prioritized recommendations with drill-down skill references
-5. **⛔ STOP — Query File Recommendation Gate:** Before proceeding to step 6, explicitly check: _"Do any domains have a 🔴 or 🟠 verdict?"_ If YES → execute the [Query File Recommendations](#query-file-recommendations) procedure NOW (extract keywords from findings → `grep_search` scoped to `queries/**` → match files → prepare the `📂 Recommended Query Files` section). If NO (all ✅/🟡) → skip. **Do NOT proceed to step 6 until this gate is resolved.**
-6. Render output in requested mode (report MUST include the Query Files section if step 5 triggered it)
+5. **⛔ STOP — Recommendation Gate:** Before proceeding to step 6, run the [Query File Recommendations](#query-file-recommendations) procedure matching the highest verdict tier (see Rule 9 table). Skip only when all verdicts are ✅. **Do NOT proceed to step 6 until this gate is resolved.**
+6. Render output in requested mode (report MUST include the recommendations section if step 5 triggered it)
 
 ### Phase 4: Interactive Follow-Up Loop
 
-**After rendering the report, present the user with a selectable list of follow-up actions — skill investigations, query file hunts, and IOC lookups.** Runs ONLY when at least one 🔴/🟠 verdict exists.
+**After rendering the report, present the user with a selectable list of follow-up actions — skill investigations, query file hunts, and IOC lookups.** Runs when at least one 🔴, 🟠, or 🟡 verdict exists (skip only when ALL verdicts are ✅).
 
 **This is a loop, not a one-shot.** After each action completes, re-present the selection list with the prompt pool updated.
+
+**🟡 Monitor-only environments:** When the highest verdict is 🟡, the prompt pool emphasizes broader posture/assessment skills rather than entity-specific deep-dives. This gives smaller environments actionable next steps even when no finding crosses the escalation threshold.
 
 **Prompt types (three categories, one unified list):**
 
@@ -197,7 +199,7 @@ Estimated time: ~2–4 minutes
 1. Build the **initial prompt pool** by combining:
    - Skill prompts: one per unique entity + matching skill from the table above
    - Query file prompts: from Phase 3 step 5 keyword extraction
-   - IOC prompts: any suspicious IPs/domains from 🔴/🟠 findings not already covered by a skill prompt
+   - IOC prompts: any suspicious IPs/domains from non-✅ findings not already covered by a skill prompt
    - Deduplicate: if a skill prompt and IOC prompt target the same entity, keep only the skill prompt
 2. Present the pool using the interactive question tool:
    - **Header:** `Follow-Up Investigation`
@@ -437,15 +439,15 @@ SigninLogs
 **Tool:** `RunAdvancedHuntingQuery`
 
 ```kql
-let EntraSpray = SigninLogs
-| where TimeGenerated > ago(7d)
-| where ResultType in ("50126", "50053", "50057")
+let EntraSpray = EntraIdSignInEvents
+| where Timestamp > ago(7d)
+| where ErrorCode in (50126, 50053, 50057)
 | summarize
     FailedAttempts = count(),
-    TargetUsers = dcount(UserPrincipalName),
-    SampleTargets = make_set(UserPrincipalName, 5),
-    Protocols = make_set(AppDisplayName, 3),
-    Countries = make_set(Location, 3)
+    TargetUsers = dcount(AccountUpn),
+    SampleTargets = make_set(AccountUpn, 5),
+    Protocols = make_set(Application, 3),
+    Countries = make_set(Country, 3)
     by SourceIP = IPAddress
 | where TargetUsers >= 5
 | extend Surface = "Entra ID";
@@ -469,12 +471,13 @@ union EntraSpray, EndpointBrute
 ```
 
 **Purpose:** Detects password spray (1 IP → many users, MITRE T1110.003) and brute-force (1 IP → high failure count, T1110.001) across two surfaces:
-- **Entra ID:** Cloud sign-in failures (50126=bad password, 50053=locked account, 50057=disabled account). An IP targeting ≥5 distinct users with these errors is a strong spray signal. `Protocols` reveals if legacy auth (POP/IMAP/SMTP) is being targeted.
+- **Entra ID:** Uses `EntraIdSignInEvents` (Advanced Hunting) which merges interactive + non-interactive sign-ins into a single table, providing broader coverage than SigninLogs alone. Error codes: 50126=bad password, 50053=locked account, 50057=disabled account. An IP targeting ≥5 distinct users with these errors is a strong spray signal. `Protocols` reveals if legacy auth (POP/IMAP/SMTP) is being targeted.
 - **Endpoint:** RDP (`RemoteInteractive`) and SSH/SMB (`Network`) failed logons on MDE-enrolled devices. Threshold of ≥10 failures catches brute-force against exposed endpoints.
 
 **Verdict logic:**
 - 🔴 Escalate: Any IP targeting >25 Entra users OR >100 endpoint failures from a single IP
 - 🟠 Investigate: Any spray/brute-force pattern detected (meets thresholds)
+- 🟡 Monitor: Spray activity detected but below thresholds (e.g., single IP with 3–4 target users, or <10 endpoint failures)
 - ✅ Clear: 0 results — no spray/brute-force patterns detected
 
 **Drill-down:** Use `user-investigation` skill for targeted users, `ioc-investigation` for source IPs.
@@ -715,7 +718,8 @@ AuditLogs
 **Purpose:** Shows who's been performing privileged admin operations. Unexpected actors or unusual volume (e.g., 36 password resets from one user in a week) warrant investigation. System-initiated operations (empty Actor) are normal PIM lifecycle events.
 
 **Verdict logic:**
-- 🟠 Investigate: Unexpected user appearing as Actor; high-volume single-user operations
+- � Escalate: Credential/consent/CA policy changes from unexpected actors, or bulk password resets from a single user
+- �🟠 Investigate: Unexpected user appearing as Actor; high-volume single-user operations
 - 🟡 Monitor: Normal PIM/system operations; expected admin activity
 - ✅ Clear: Only system-driven operations with expected volume
 
@@ -825,32 +829,48 @@ After all queries complete, check these correlation patterns and escalate priori
 
 ## Query File Recommendations
 
-After assigning verdicts and generating recommendations, search the `queries/` library for pre-built hunting campaigns that target the TTPs and threat patterns surfaced by today's scan. **Only run this step when at least one 🔴 or 🟠 verdict exists.**
+Search the `queries/` library for hunting campaigns targeting TTPs surfaced by today's scan. Tier depth follows the Rule 9 table — skip entirely when all verdicts are ✅.
 
 ### Keyword Extraction Rules
 
-Extract search keywords deterministically from 🔴/🟠 findings:
+Extract search keywords from findings in domains that received a non-✅ verdict. For 🔴/🟠 use all listed keywords; for 🟡-only use the **bold** domain keyword.
 
-| Finding Source | Keywords to Extract |
-|---------------|--------------------|
-| Q1/Q1b (Incidents) | MITRE tactic names from Q1 `Tactics` column AND Q1b closed TP tactics (e.g., "lateral movement", "credential access"), alert titles |
-| Q2/Q2b (Identity Anomalies) | "anomaly", "sign-in", "identity", "phishing" if geo-novelty flags set |
-| Q3 (Identity Protection) | "risky sign-in", "token", "aitm", "phishing" if risk detail contains these |
-| Q4 (Auth Spray) | "brute force", "password spray", "RDP", "credential" |
-| Q5 (SPN Drift) | "service principal", "app registration", "credential" |
-| Q7 (Rare Processes) | Process names from singleton chains (e.g., "mimikatz", "rclone", "psexec"), "rare process" |
-| Q8 (Email) | "phishing", "email", "spam", "malware" if delivered threats > 0 |
-| Q9 (Cloud App Ops) | ActionType values from CloudAppEvents (e.g., "New-InboxRule", "New-TransportRule", "Add-MailboxPermission") |
-| Q12 (CVEs) | Specific CVE IDs from results, software names from `SoftwareName` column |
+| Finding Source | Keywords |
+|---------------|---------|
+| Q1/Q1b (Incidents) | **"incident"**, MITRE tactic names, alert titles |
+| Q2/Q2b (Identity) | **"identity"**, "anomaly", "sign-in", "phishing" if geo-novelty |
+| Q3 (Identity Protection) | **"risky sign-in"**, "token", "aitm", "phishing" if in risk detail |
+| Q4 (Auth Spray) | **"password spray"**, "brute force", "RDP", "credential" |
+| Q5 (SPN Drift) | **"service principal"**, "app registration", "credential" |
+| Q6/Q7 (Endpoint) | **"process"**, singleton process names (mimikatz, rclone, psexec), "rare process" |
+| Q8 (Email) | **"phishing"**, "email", "spam", "malware" if delivered threats > 0 |
+| Q9/Q10 (Admin & Cloud) | **"admin"**, ActionType values (New-InboxRule, New-TransportRule, etc.) |
+| Q11/Q12 (Exposure) | **"vulnerability"**, specific CVE IDs, software names |
+
+### Proactive Skill Suggestions (🟡-only supplement)
+
+When the highest verdict is 🟡, supplement query file results with up to **3** posture skill suggestions from the most relevant 🟡 domains:
+
+| Domain | Skill | Prompt |
+|--------|-------|--------|
+| Q1/Q1b (Incidents) | `incident-investigation` | "Triage the oldest open incident to review classification" |
+| Q2/Q2b, Q3 (Identity) | `identity-posture` | "Run identity posture report for account hygiene and privilege review" |
+| Q4 (Auth Spray) | `ioc-investigation` | "Enrich the top spray source IP for threat intel context" |
+| Q5 (SPN Drift) | `app-registration-posture` | "Run app registration posture audit for SPN hygiene and overprivilege detection" |
+| Q6, Q7 (Endpoint) | `computer-investigation` | "Investigate the top drifting device for process and network activity" |
+| Q8 (Email) | `email-threat-posture` | "Run full email threat posture report for delivery and protection gaps" |
+| Q9, Q10 (Admin & Cloud) | `user-investigation` | "Investigate the most active admin user for full activity review" |
+| Q11, Q12 (Exposure) | `exposure-investigation` | "Run org-wide vulnerability report" |
 
 ### Search Procedure
 
-1. Collect keywords from all 🔴/🟠 domains using the extraction rules above
+1. Collect keywords from non-✅ domains using the extraction rules above (🔴/🟠: all keywords; 🟡-only: bold domain keywords)
 2. Run `grep_search` with each keyword (or combined with `|` alternation) scoped to `queries/**`
 3. Deduplicate matched files — a file matching multiple keywords ranks higher
 4. Read the first 10 lines of each matched file to extract the `# Title` from line 1 of the metadata header — this becomes the clickable link display text
-5. Select the **top 3–5 most relevant** files, ranked by number of keyword matches
+5. Select the **top N most relevant** files (🔴/🟠: 3–5 files; 🟡-only: 1–2 files), ranked by keyword matches
 6. **Format each file as a clickable markdown link:** `[<Title from step 4>](queries/<subfolder>/<filename>.md)` — plain text or backtick-wrapped paths are PROHIBITED
+7. **🟡-only:** Also select up to 3 proactive skill suggestions from the table above for the most relevant 🟡 domains
 
 ### Report Output Block
 
@@ -963,7 +983,7 @@ Render the following sections in order. Omit sections only if explicitly noted a
 | Q1 | 🔴 **Incidents** | <verdict> | <1-line finding — includes Q1b closed summary context> |
 | Q2 | 🔐 **Sign-In Anomalies** | <verdict> | <1-line finding> |
 | Q3 | 🔐 **Identity Protection** | <verdict> | <1-line finding> |
-| Q4 | � **Auth Spray** | <verdict> | <1-line finding> |
+| Q4 | 🔐 **Auth Spray** | <verdict> | <1-line finding> |
 | Q5 | 🤖 **SPN Drift** | <verdict> | <1-line finding> |
 | Q6 | 💻 **Device Drift** | <verdict> | <1-line finding> |
 | Q7 | 💻 **Rare Processes** | <verdict> | <1-line finding> |
@@ -1049,9 +1069,20 @@ No incidents closed in the last 7 days.
 
 ## 📂 Recommended Query Files for Follow-Up Hunting
 
-<Render this section per the Query File Recommendations procedure. Only appears when 🔴/🟠 verdicts exist.>
+<If any 🔴/🟠 verdicts exist: Render the full section per the Query File Recommendations procedure.>
 
-<If all verdicts are ✅/🟡, omit this section entirely.>
+<If highest verdict is 🟡 (no 🔴/🟠): Render a lighter section titled "📂 Proactive Hunting Suggestions" instead:>
+
+📂 Proactive Hunting Suggestions
+
+No findings crossed escalation thresholds today, but these domains showed activity worth a broader look:
+
+1. **Proactive skill:** `<skill-name>` — *"<prompt from Proactive Skill Mapping table>"*
+2. **[<Query File Title>](queries/<subfolder>/<filename>.md)** — *"<broader hunting prompt based on 🟡 domain keywords>"*
+
+> **Smaller environments often benefit from running posture assessments proactively** — the skills above provide full-domain visibility even when individual signals stay below alert thresholds.
+
+<If all verdicts are ✅: Omit the section entirely.>
 
 ---
 
@@ -1124,7 +1155,7 @@ Before rendering the final report, verify:
 - [ ] Each recommendation references a specific drill-down skill
 - [ ] Q2b fallback noted in report if custom table was unavailable
 - [ ] No fabricated data — all findings trace to actual query results
-- [ ] **⛔ Query file recommendations:** If ANY verdict is 🔴 or 🟠, the `📂 Recommended Query Files` section MUST appear in the report with at least one matched file or the "no matching files" template. Rendering a report with 🔴/🟠 verdicts but NO query file recommendations section is **PROHIBITED**.
+- [ ] **⛔ Query file recommendations:** If ANY verdict is 🔴 or 🟠, the `📂 Recommended Query Files` section MUST appear in the report with at least one matched file or the "no matching files" template. If highest verdict is 🟡, the `📂 Proactive Hunting Suggestions` section MUST appear. Rendering a report with non-✅ verdicts but NO recommendations section is **PROHIBITED**.
 - [ ] **⛔ Query file links are clickable:** Every query file in the `📂 Recommended Query Files` table MUST be a clickable markdown link `[Title](queries/subfolder/file.md)` — NOT plain text, NOT backtick-wrapped. The user must be able to click the link to open the file and add it as context to a follow-up chat.
 
 ---
