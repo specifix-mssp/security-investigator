@@ -115,7 +115,34 @@ Retrieve and list the incident's metadata using `GetIncidentById`:
 
 ### 1.2 Incident Alerts
 
-Retrieve and list the **top 30** incident alerts. For each alert, retrieve:
+#### 🔴 Tool Selection for Alert Retrieval
+
+**Use `GetIncidentById` with `includeAlertsData=true`** to retrieve incident-specific alerts. This returns only alerts correlated to the incident.
+
+**⛔ DO NOT use `ListAlerts` to retrieve alerts for a specific incident.** `ListAlerts` has NO `incidentId` parameter — it can only filter by `createdAfter`, `createdBefore`, `severity`, `status`. Calling it returns **all tenant alerts** (up to page size 10,000), not incident-specific ones. Any unsupported parameter (e.g., `incidentId`) is silently ignored.
+
+**If `GetIncidentById(includeAlertsData=true)` returns a truncated or excessively large response** (e.g., incident has hundreds of correlated alerts from noise sources like Purview IRM or DLP), use `RunAdvancedHuntingQuery` as the fallback:
+
+```kql
+// Get alerts linked to the incident's primary user/entity
+AlertInfo
+| where Timestamp > datetime(<incident_created_minus_7d>)
+| join kind=inner (
+    AlertEvidence
+    | where Timestamp > datetime(<incident_created_minus_7d>)
+    | where EntityType == "User"
+    | where AccountUpn =~ "<primary_user_upn>" or AccountObjectId == "<user_object_id>"
+    | distinct AlertId
+) on AlertId
+| project Timestamp, AlertId, Title, Severity, Category, AttackTechniques, DetectionSource, ServiceSource
+| order by Timestamp asc
+```
+
+This approach bypasses the Triage MCP's alert cap and gives full control over date range and entity filtering.
+
+#### Alert Fields to Retrieve
+
+For each alert, retrieve:
 - Alert name
 - Tags
 - Severity

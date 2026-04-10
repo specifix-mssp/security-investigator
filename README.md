@@ -1,6 +1,6 @@
 # 🔒 Security Investigation Automation System
 
-**Comprehensive, automated security investigations powered by Microsoft Sentinel, Defender XDR, Graph API, and threat intelligence — with 23 specialized Agent Skills**
+**Comprehensive, automated security investigations powered by Microsoft Sentinel, Defender XDR, Graph API, and threat intelligence — with 25 specialized Agent Skills**
 
 > 📺 **Video Walkthrough:** See this project in action — [Watch on YouTube](https://youtu.be/3UFqWA4cmoE?t=1470) (starts at the Security Investigator demo). Covers the end-to-end workflow: natural language investigations, MCP server integration, KQL query execution, threat intelligence enrichment, and automated report generation.
 
@@ -37,7 +37,7 @@ copy .vscode\mcp.json.template .vscode\mcp.json
 
 **For detailed workflows and KQL queries:**
 → [.github/copilot-instructions.md](.github/copilot-instructions.md) (universal patterns, skill detection)
-→ [.github/skills/](.github/skills/) (23 specialized investigation workflows)
+→ [.github/skills/](.github/skills/) (25 specialized investigation workflows)
 → [queries/](queries/) (verified KQL query library)
 
 ---
@@ -52,7 +52,7 @@ copy .vscode\mcp.json.template .vscode\mcp.json
 │            (Skill detection, universal patterns, routing)          │
 ├────────────────────────────────────────────────────────────────────┤
 │                     .github/skills/*.md                            │
-│       (23 specialized workflows with KQL, risk assessment)         │
+│       (25 specialized workflows with KQL, risk assessment)         │
 ├────────────────────────────────────────────────────────────────────┤
 │                     MCP Servers (Platform)                         │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────────────┐  │
@@ -80,7 +80,7 @@ copy .vscode\mcp.json.template .vscode\mcp.json
 ```
 
 **Key Components:**
-- **23 Agent Skills** — Modular investigation workflows for incidents, users, devices, IoCs, authentication, scope drift (SPN/User/Device), MCP monitoring, exposure management, AI agent posture, identity posture, data security analysis, email threat posture, MITRE ATT&CK coverage, ingestion analysis, detection authoring, SVG dashboards, and more
+- **25 Agent Skills** — Modular investigation workflows for incidents, users, devices, IoCs, authentication, scope drift (SPN/User/Device), MCP monitoring, exposure management, AI agent posture, app registration posture, identity posture, data security analysis, email threat posture, MITRE ATT&CK coverage, ingestion analysis, detection authoring, threat pulse scanning, SVG dashboards, and more
 - **7 MCP Server Integrations** — Sentinel Data Lake, Graph API, Defender XDR Triage, KQL Search, Microsoft Learn, Azure MCP Server, Sentinel Graph (private preview)
 - **3 Local MCP Apps** — Interactive heatmaps, geographic attack maps, incident commenting
 - **Python Utilities** — HTML report generation with IP enrichment (geolocation, VPN detection, abuse scores, Shodan port/service/CVE intelligence)
@@ -106,6 +106,8 @@ copy .vscode\mcp.json.template .vscode\mcp.json
 - **AI Agent Posture Audit** — Agent inventory, authentication gaps, MCP tool proliferation, knowledge source exposure, XPIA risk, Agent Security Score for Copilot Studio and M365 Copilot agents
 - **Identity Posture Report** — Multi-provider account inventory, privileged account audit, stale/deleted account hygiene, password posture, risk distribution, multi-provider identity linking, Identity Posture Score
 - **Data Security Analysis** — Sensitive information type (SIT) access patterns, DLP policy correlation, insider risk triage, EDM monitoring, file-based risk ranking, spike detection across DataSecurityEvents
+- **Threat Pulse** — Rapid 15-minute broad-spectrum security scan across 9 domains (incidents, identity, endpoint, exposure, SPN drift, email, UEBA, auth spray, CVEs) with prioritized dashboard and drill-down recommendations
+- **App Registration Posture** — App registration and service principal security posture: dangerous Graph API permissions, ownership risk, credential hygiene, cross-tenant SPN exposure, KQL attack chain detection, App Permission Risk Score
 - **Visualizations** — Interactive heatmaps, geographic attack maps, and SVG data dashboards
 
 ---
@@ -114,7 +116,7 @@ copy .vscode\mcp.json.template .vscode\mcp.json
 
 This system uses **[VS Code Agent Skills](https://code.visualstudio.com/docs/copilot/customization/agent-skills)** to provide modular, domain-specific investigation workflows. Skills are automatically detected based on keywords in your prompts.
 
-### Available Skills (23)
+### Available Skills (25)
 
 | Category | Skill | Description | Trigger Keywords |
 |----------|-------|-------------|------------------|
@@ -123,13 +125,15 @@ This system uses **[VS Code Agent Skills](https://code.visualstudio.com/docs/cop
 | 🔍 Core Investigation | **[incident-investigation](/.github/skills/incident-investigation/SKILL.md)** | Comprehensive incident analysis for Defender XDR and Sentinel incidents: criticality assessment, entity extraction, filtering, recursive entity investigation | "investigate incident", "incident ID", "analyze incident", "triage incident", incident number |
 | 🔍 Core Investigation | **[ioc-investigation](/.github/skills/ioc-investigation/SKILL.md)** | Indicator of Compromise analysis: IP addresses, domains, URLs, file hashes. Includes Defender Threat Intelligence, Sentinel TI tables, CVE correlation, organizational exposure | "investigate IP", "investigate domain", "investigate URL", "investigate hash", "IoC", "is this malicious" |
 | 🔍 Core Investigation | **[user-investigation](/.github/skills/user-investigation/SKILL.md)** | Entra ID user security analysis: sign-ins, anomalies, MFA, devices, audit logs, incidents, Identity Protection, HTML reports | "investigate user", "security investigation", "check user activity", UPN/email |
-| 🔐 Auth & Access | **[authentication-tracing](/.github/skills/authentication-tracing/SKILL.md)** | Entra ID authentication chain forensics: SessionId analysis, token reuse vs interactive MFA, geographic anomalies | "trace authentication", "SessionId analysis", "token reuse", "geographic anomaly" |
+| � Quick Scan | **[threat-pulse](/.github/skills/threat-pulse/SKILL.md)** | Rapid 15-minute broad-spectrum security scan across 9 domains: active incidents, identity anomalies, risky sign-ins, device process drift, rare process chains, critical asset exposure, SPN drift, email threats, UEBA behaviors, auth spray, privileged ops, exploitable CVEs. Prioritized Threat Pulse Dashboard with color-coded verdicts and drill-down recommendations | "threat pulse", "quick scan", "security pulse", "morning hunt", "what can you do", "where do I start", "what's going on" |
+| �🔐 Auth & Access | **[authentication-tracing](/.github/skills/authentication-tracing/SKILL.md)** | Entra ID authentication chain forensics: SessionId analysis, token reuse vs interactive MFA, geographic anomalies | "trace authentication", "SessionId analysis", "token reuse", "geographic anomaly" |
 | 🔐 Auth & Access | **[ca-policy-investigation](/.github/skills/ca-policy-investigation/SKILL.md)** | Conditional Access policy forensics: sign-in failure correlation, policy state changes, security bypass detection | "Conditional Access", "CA policy", "device compliance", "policy bypass" |
 | 📈 Behavioral Analysis | **[scope-drift-detection/device](/.github/skills/scope-drift-detection/device/SKILL.md)** | Device process drift: configurable-window baseline, 5-dimension Drift Score (Volume/Processes/Accounts/Chains/Signing), fleet-wide or single-device, Heartbeat uptime corroboration | "device drift", "endpoint drift", "process baseline", "device behavioral change" |
 | 📈 Behavioral Analysis | **[scope-drift-detection/spn](/.github/skills/scope-drift-detection/spn/SKILL.md)** | SPN scope drift: 90-day baseline vs 7-day comparison, 5-dimension Drift Score, correlated with AuditLogs, SecurityAlert, DeviceNetworkEvents | "scope drift", "service principal drift", "SPN behavioral change", "SPN drift" |
 | 📈 Behavioral Analysis | **[scope-drift-detection/user](/.github/skills/scope-drift-detection/user/SKILL.md)** | User scope drift: 90-day baseline vs 7-day comparison, dual Drift Scores (7-dim interactive + 6-dim non-interactive), correlated with AuditLogs, SecurityAlert, Identity Protection, CloudAppEvents, EmailEvents | "user drift", "user scope drift", "user behavioral change", "UPN drift" |
 | 🛡️ Posture & Exposure | **[exposure-investigation](/.github/skills/exposure-investigation/SKILL.md)** | Vulnerability & Exposure Management reporting: CVE assessment with exploit/CVSS data, security configuration compliance, end-of-support software, ExposureGraph critical assets, attack paths, Defender health, certificate status | "vulnerability report", "exposure report", "CVE assessment", "security posture", "TVM" |
 | 🛡️ Posture & Exposure | **[ai-agent-posture](/.github/skills/ai-agent-posture/SKILL.md)** | AI agent security posture audit for Copilot Studio and M365 Copilot agents: agent inventory, authentication gaps, access control misconfigurations, MCP tool proliferation, knowledge source exposure, XPIA risk, credential detection, Agent Security Score | "AI agent posture", "agent security audit", "Copilot Studio agents", "agent inventory", "unauthenticated agents", "agent sprawl" |
+| 🛡️ Posture & Exposure | **[app-registration-posture](/.github/skills/app-registration-posture/SKILL.md)** | App registration and service principal security posture: Graph API permission inventory (dangerous grants, permission concentration), app ownership risk, credential hygiene (stale secrets, multi-credential apps), cross-tenant SPN exposure, KQL attack chain detection (AuditLogs, AADServicePrincipalSignInLogs, MicrosoftGraphActivityLogs), App Permission Risk Score with 5 dimensions | "app registration posture", "app registration abuse", "service principal permissions", "dangerous app permissions", "app ownership", "overprivileged apps" |
 | 🛡️ Posture & Exposure | **[email-threat-posture](/.github/skills/email-threat-posture/SKILL.md)** | Email threat protection posture report for Microsoft Defender for Office 365: inbound mail flow overview, threat composition (phishing/spam/malware), email authentication (DMARC/DKIM/SPF/CompAuth), ZAP post-delivery remediation, Safe Links click protection, attachment analysis, detection method breakdown, MDO security incidents, Email Protection Score with 5 dimensions. Inline chat, markdown file, and SVG dashboard output | "email threat report", "email security posture", "phishing report", "MDO report", "Defender for Office 365 report", "ZAP effectiveness", "Safe Links report", "DMARC report" |
 | 🛡️ Posture & Exposure | **[identity-posture](/.github/skills/identity-posture/SKILL.md)** | Identity security posture report using IdentityAccountInfo (MDI/Advanced Hunting): multi-provider account inventory (Entra ID, AD, Okta, SailPoint, CyberArk, Ping), privileged account audit with role distribution, stale/disabled/deleted account hygiene, password posture, risk distribution, multi-provider identity linking, MDI tag analysis, Identity Posture Score with 5 dimensions. Inline chat and markdown file output | "identity posture", "identity security report", "account hygiene", "stale accounts", "privileged accounts", "password posture", "identity providers", "honeytoken" |
 | 🔒 Data Security | **[data-security-analysis](/.github/skills/data-security-analysis/SKILL.md)** | DataSecurityEvents (Purview/IRM) analysis: SIT access breakdowns, user risk ranking, file inventory, DLP policy correlation, Copilot SIT exposure, SIT GUID-to-name resolution, anomaly detection. Designed for 100k+ user environments | "data security", "sensitive information type", "SIT access", "DLP events", "DataSecurityEvents", "EDM access", "insider risk activity", "Purview data security" |
@@ -181,6 +185,10 @@ You don't need to mention the skill name — keywords are detected automatically
 | "Show me stale accounts and privileged account hygiene" | identity-posture |
 | "Generate a MITRE ATT&CK coverage report" | mitre-coverage-report |
 | "What's our MITRE technique coverage and detection gaps?" | mitre-coverage-report |
+| "Run a threat pulse scan" | threat-pulse |
+| "What can you do? / Where do I start?" | threat-pulse |
+| "Audit our app registration security posture" | app-registration-posture |
+| "Show dangerous app permissions and ownership risks" | app-registration-posture |
 
 ### Follow-ups and Chaining
 
@@ -259,8 +267,9 @@ security-investigator/
 ├── requirements.txt             # Python dependencies
 ├── .github/
 │   ├── copilot-instructions.md  # Skill detection, universal patterns, routing
-│   └── skills/                  # 23 Agent Skills (modular investigation workflows)
+│   └── skills/                  # 25 Agent Skills (modular investigation workflows)
 │       ├── ai-agent-posture/
+│       ├── app-registration-posture/
 │       ├── authentication-tracing/
 │       ├── ca-policy-investigation/
 │       ├── computer-investigation/
@@ -283,6 +292,7 @@ security-investigator/
 │       │   └── device/           # Device process drift (5 dimensions)
 │       ├── sentinel-ingestion-report/
 │       ├── svg-dashboard/
+│       ├── threat-pulse/
 │       └── user-investigation/
 ├── queries/                     # Verified KQL query library (grep-searchable, by data domain)
 │   ├── identity/               # Entra ID / Azure AD identity queries
@@ -297,6 +307,7 @@ security-investigator/
 ├── docs/                        # Setup guides and reference documentation
 ├── reports/                     # Generated investigation reports (organized by type)
 │   ├── ai-agent-posture/       # AI agent security posture reports
+│   ├── app-registration-posture/ # App registration posture reports
 │   ├── computer-investigations/ # Device security investigation reports
 │   ├── data-security/          # Data security SIT analysis reports
 │   ├── email-threat-posture/   # Email threat protection posture reports
@@ -306,6 +317,7 @@ security-investigator/
 │   ├── mcp-usage/              # MCP usage monitoring reports
 │   ├── scope-drift/            # Scope drift analysis reports
 │   ├── sentinel/               # Sentinel ingestion & cost analysis reports
+│   ├── threat-pulse/           # Threat Pulse scan reports
 │   └── user-investigations/    # HTML user investigation reports
 ├── temp/                        # Investigation JSON files (auto-cleaned after 3 days)
 └── archive/                     # Legacy code and design docs
