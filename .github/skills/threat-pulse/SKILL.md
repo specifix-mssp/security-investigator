@@ -495,36 +495,47 @@ EmailEvents
 
 **Tool:** `RunAdvancedHuntingQuery`
 
+**⚠️ Two-stage query pattern:** The original single-query join (`BehaviorInfo ↔ BehaviorEntities` with `make_set(strcat(coalesce(...)))`) times out via the Advanced Hunting Graph API (~30s limit) on workspaces with moderate-to-high behavior volume. The fix: **Stage 1** queries `BehaviorInfo` alone for the summary dashboard. **Stage 2** (optional, only if Stage 1 returns 🟠/🔴 findings) queries `BehaviorEntities` for specific `BehaviorId` values to enrich the report with entity details.
+
+**Stage 1 — Summary (always run):**
+
 ```kql
 BehaviorInfo
-| where Timestamp > ago(30d)
-| join kind=inner (
-    BehaviorEntities
-    | where Timestamp > ago(30d)
-    | where EntityType in ("User", "Ip", "CloudApplication")
-    | summarize 
-        Entities = make_set(
-            strcat(EntityType, ":", coalesce(AccountUpn, AccountName, RemoteIP, Application, DeviceName, "")), 5)
-        by BehaviorId
-) on BehaviorId
+| where Timestamp > ago(7d)
 | summarize 
     DetectionCount = count(),
-    AffectedEntities = dcount(tostring(Entities)),
-    DateRange = strcat(format_datetime(min(Timestamp), "yyyy-MM-dd"), " to ", format_datetime(max(Timestamp), "yyyy-MM-dd")),
-    SampleEntities = make_set(tostring(Entities), 3)
+    DateRange = strcat(format_datetime(min(Timestamp), "yyyy-MM-dd"), " to ", format_datetime(max(Timestamp), "yyyy-MM-dd"))
     by ActionType, ServiceSource
 | order by DetectionCount desc
 | take 15
 ```
 
-**Purpose:** Surfaces MCAS behavioral signals below the alert threshold — impossible travel, mass downloads, unusual OAuth credential additions, multi-failed logins. These are early-warning indicators that complement SecurityAlert.
+**Stage 2 — Entity enrichment (run only for flagged ActionTypes):**
+
+```kql
+let FlaggedBehaviors = BehaviorInfo
+| where Timestamp > ago(7d)
+| where ActionType in ("UnusualAdditionOfCredentialsToAnOauthApp", "ImpossibleTravelActivity", "MassDownload")
+| project BehaviorId;
+BehaviorEntities
+| where Timestamp > ago(7d)
+| where BehaviorId in (FlaggedBehaviors)
+| where EntityType in ("User", "Ip", "CloudApplication")
+| summarize 
+    Entities = make_set(
+        strcat(EntityType, ":", coalesce(AccountUpn, AccountName, RemoteIP, Application, DeviceName, "")), 5)
+    by BehaviorId
+| take 20
+```
+
+**Purpose:** Surfaces MCAS behavioral signals below the alert threshold — impossible travel, mass downloads, unusual OAuth credential additions, multi-failed logins. These are early-warning indicators that complement SecurityAlert. The two-stage design keeps Stage 1 fast (<5s) and avoids the expensive cross-table join unless specific high-priority behaviors are detected.
 
 **Verdict logic:**
-- 🟠 Investigate: `UnusualAdditionOfCredentialsToAnOauthApp` or `ImpossibleTravelActivity` detected
-- 🟡 Monitor: `MultipleFailedLoginAttempts` or `MassDownload` detected
+- 🟠 Investigate: `UnusualAdditionOfCredentialsToAnOauthApp` or `ImpossibleTravelActivity` detected → run Stage 2
+- 🟡 Monitor: `MultipleFailedLoginAttempts` or `MassDownload` detected → run Stage 2
 - ✅ Clear: No behavioral detections (or MCAS/UEBA not deployed — note as ❓)
 
-**Known limitation:** `BehaviorEntities` does not have an `EntityName` column. Use `AccountUpn`, `AccountName`, `RemoteIP`, `Application`, or `DeviceName` depending on `EntityType`. The `coalesce()` pattern in the query handles this.
+**Known limitation:** `BehaviorEntities` does not have an `EntityName` column. Use `AccountUpn`, `AccountName`, `RemoteIP`, `Application`, or `DeviceName` depending on `EntityType`. The `coalesce()` pattern in Stage 2 handles this. Some `ActionType` values from MDE appear as GUIDs rather than human-readable names — report them as-is with the ServiceSource for context.
 
 ---
 
@@ -829,6 +840,8 @@ Include the following additional sections in the file report that are omitted fr
 | `Signinlogs_Anomalies_KQL_CL` doesn't exist | Q2 fails | Silently fall back to Q2b (Identity Protection) |
 | `SecurityAlert.Status` is always "New" | Misleading incident triage | Q1 joins SecurityIncident for real Status |
 | `BehaviorEntities` has no `EntityName` column | Q9 fails with SemanticError | Use `coalesce(AccountUpn, AccountName, RemoteIP, Application, DeviceName)` |
+| Q9 join (`BehaviorInfo ↔ BehaviorEntities`) times out via AH Graph API | User cancellation / ~30s timeout on 30d join with `make_set(strcat(coalesce(...)))` | Two-stage pattern: Stage 1 queries BehaviorInfo alone (7d); Stage 2 enriches specific BehaviorIds only when 🟠/🔴 findings exist |
+| Q9 `ActionType` values from MDE appear as GUIDs | Dashboard shows opaque IDs instead of human-readable names | Report GUIDs as-is with ServiceSource; only MCAS behaviors use readable names (e.g., `ImpossibleTravelActivity`) |
 | `ExposureGraphNodes.NodeProperties` requires double `parse_json()` | Null values if single parse | Q6 uses `parse_json(tostring(parse_json(...)))` pattern |
 | Q7 (SPN drift) takes ~35s due to 97d lookback | Slow query | Acceptable — runs in parallel with other Data Lake queries |
 | `DeviceTvmSoftwareVulnerabilities` is AH-only | Data Lake returns "table not found" | Q12 must use `RunAdvancedHuntingQuery` |
