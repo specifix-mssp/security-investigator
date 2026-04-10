@@ -104,13 +104,13 @@ This system uses **[VS Code Agent Skills](https://code.visualstudio.com/docs/cop
 
 | Category | Skill | Description | Trigger Keywords |
 |----------|-------|-------------|------------------|
+| ⚡ Quick Scan | **[threat-pulse](/.github/skills/threat-pulse/SKILL.md)** | Rapid 15-minute broad-spectrum security scan across 9 domains: active incidents, identity anomalies, risky sign-ins, device process drift, rare process chains, critical asset exposure, SPN drift, email threats, UEBA behaviors, auth spray, privileged ops, exploitable CVEs. Prioritized Threat Pulse Dashboard with color-coded verdicts and drill-down recommendations | "threat pulse", "quick scan", "security pulse", "morning hunt", "what can you do", "where do I start", "what's going on" |
 | 🔍 Core Investigation | **[computer-investigation](/.github/skills/computer-investigation/SKILL.md)** | Device security analysis for Entra Joined, Hybrid Joined, and Entra Registered devices: Defender alerts, compliance, logged-on users, vulnerabilities, process/network/file events | "investigate computer", "investigate device", "investigate endpoint", "check machine", hostname |
 | 🔍 Core Investigation | **[honeypot-investigation](/.github/skills/honeypot-investigation/SKILL.md)** | Honeypot security analysis: attack patterns, threat intel, vulnerabilities, executive reports | "honeypot", "attack analysis", "threat actor" |
 | 🔍 Core Investigation | **[incident-investigation](/.github/skills/incident-investigation/SKILL.md)** | Comprehensive incident analysis for Defender XDR and Sentinel incidents: criticality assessment, entity extraction, filtering, recursive entity investigation | "investigate incident", "incident ID", "analyze incident", "triage incident", incident number |
 | 🔍 Core Investigation | **[ioc-investigation](/.github/skills/ioc-investigation/SKILL.md)** | Indicator of Compromise analysis: IP addresses, domains, URLs, file hashes. Includes Defender Threat Intelligence, Sentinel TI tables, CVE correlation, organizational exposure | "investigate IP", "investigate domain", "investigate URL", "investigate hash", "IoC", "is this malicious" |
 | 🔍 Core Investigation | **[user-investigation](/.github/skills/user-investigation/SKILL.md)** | Entra ID user security analysis: sign-ins, anomalies, MFA, devices, audit logs, incidents, Identity Protection, HTML reports | "investigate user", "security investigation", "check user activity", UPN/email |
-| � Quick Scan | **[threat-pulse](/.github/skills/threat-pulse/SKILL.md)** | Rapid 15-minute broad-spectrum security scan across 9 domains: active incidents, identity anomalies, risky sign-ins, device process drift, rare process chains, critical asset exposure, SPN drift, email threats, UEBA behaviors, auth spray, privileged ops, exploitable CVEs. Prioritized Threat Pulse Dashboard with color-coded verdicts and drill-down recommendations | "threat pulse", "quick scan", "security pulse", "morning hunt", "what can you do", "where do I start", "what's going on" |
-| �🔐 Auth & Access | **[authentication-tracing](/.github/skills/authentication-tracing/SKILL.md)** | Entra ID authentication chain forensics: SessionId analysis, token reuse vs interactive MFA, geographic anomalies | "trace authentication", "SessionId analysis", "token reuse", "geographic anomaly" |
+| 🔐 Auth & Access | **[authentication-tracing](/.github/skills/authentication-tracing/SKILL.md)** | Entra ID authentication chain forensics: SessionId analysis, token reuse vs interactive MFA, geographic anomalies | "trace authentication", "SessionId analysis", "token reuse", "geographic anomaly" |
 | 🔐 Auth & Access | **[ca-policy-investigation](/.github/skills/ca-policy-investigation/SKILL.md)** | Conditional Access policy forensics: sign-in failure correlation, policy state changes, security bypass detection | "Conditional Access", "CA policy", "device compliance", "policy bypass" |
 | 📈 Behavioral Analysis | **[scope-drift-detection/device](/.github/skills/scope-drift-detection/device/SKILL.md)** | Device process drift: configurable-window baseline, 5-dimension Drift Score (Volume/Processes/Accounts/Chains/Signing), fleet-wide or single-device, Heartbeat uptime corroboration | "device drift", "endpoint drift", "process baseline", "device behavioral change" |
 | 📈 Behavioral Analysis | **[scope-drift-detection/spn](/.github/skills/scope-drift-detection/spn/SKILL.md)** | SPN scope drift: 90-day baseline vs 7-day comparison, 5-dimension Drift Score, correlated with AuditLogs, SecurityAlert, DeviceNetworkEvents | "scope drift", "service principal drift", "SPN behavioral change", "SPN drift" |
@@ -302,7 +302,7 @@ Each file uses a standardized metadata header for efficient `grep_search` discov
 
 | Requirement | Details |
 |-------------|---------|
-| **VS Code** | Version 1.99+ recommended (Agent mode + MCP support). [VS Code Insiders](https://code.visualstudio.com/insiders/) required for MCP Apps (visualization). |
+| **VS Code** | Version 1.99+ recommended (Agent mode + MCP support). |
 | **GitHub Copilot** | Active subscription — [Copilot Pro+](https://github.com/features/copilot), Business, or Enterprise. Agent mode must be enabled. |
 | **Python 3.8+** | For IP enrichment utility and report generation. [Download](https://www.python.org/downloads/) |
 | **Azure CLI** | Required for Azure MCP Server (underlying auth) and `sentinel-ingestion-report` skill (`az monitor log-analytics query` for all KQL queries, `az rest` for analytic rule inventory, `az monitor log-analytics workspace table list` for tier classification). [Install](https://aka.ms/installazurecli). Authenticate: `az login --tenant <tenant_id>`, then `az account set --subscription <subscription_id>`. Requires **Log Analytics Reader** (KQL queries + table list) and **Microsoft Sentinel Reader** (analytic rule inventory) on the workspace. |
@@ -403,8 +403,6 @@ The template includes inline documentation for each server. On first use, VS Cod
 See [MCP Server Setup](#-mcp-server-setup) below for per-server permissions and installation guides.
 
 ### 4. Build MCP Apps (Optional — Visualization Skills)
-
-> ⚠️ **VS Code Insiders Required:** MCP Apps currently require [VS Code Insiders](https://code.visualstudio.com/insiders/). Requires **Node.js 18+**.
 
 **PowerShell (Windows):**
 ```powershell

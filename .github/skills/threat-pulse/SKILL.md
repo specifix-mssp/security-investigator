@@ -60,12 +60,13 @@ The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the
 2. **[Execution Workflow](#execution-workflow)** — Phased query plan with parallel groups
 3. **[Sample KQL Queries](#sample-kql-queries)** — All 12 verified queries with fallback logic
 4. **[Post-Processing](#post-processing)** — Device drift score computation, cross-query correlation
-5. **[Output Modes](#output-modes)** — Inline, markdown file, or both
-6. **[Inline Report Template](#inline-report-template)** — Dashboard format with verdicts
-7. **[Markdown File Report Template](#markdown-file-report-template)** — Extended format with appendices
-8. **[Known Pitfalls](#known-pitfalls)** — Table-specific gotchas
-9. **[Quality Checklist](#quality-checklist)** — Pre-output validation
-10. **[SVG Dashboard Generation](#svg-dashboard-generation)** — Optional visual dashboard
+5. **[Query File Recommendations](#query-file-recommendations)** — Dynamic hunting follow-up from findings
+6. **[Output Modes](#output-modes)** — Inline, markdown file, or both
+7. **[Inline Report Template](#inline-report-template)** — Dashboard format with verdicts
+8. **[Markdown File Report Template](#markdown-file-report-template)** — Extended format with appendices
+9. **[Known Pitfalls](#known-pitfalls)** — Table-specific gotchas
+10. **[Quality Checklist](#quality-checklist)** — Pre-output validation
+11. **[SVG Dashboard Generation](#svg-dashboard-generation)** — Optional visual dashboard
 
 ---
 
@@ -138,7 +139,8 @@ The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the
 2. Run cross-query correlation checks (see rule 7 above)
 3. Assign verdicts to each domain (🔴 Escalate / 🟠 Investigate / 🟡 Monitor / ✅ Clear)
 4. Generate prioritized recommendations with drill-down skill references
-5. Render output in requested mode
+5. Search for relevant query files (see [Query File Recommendations](#query-file-recommendations)) — only when 🔴/🟠 verdicts exist
+6. Render output in requested mode
 
 ---
 
@@ -686,6 +688,63 @@ After all queries complete, check these correlation patterns and escalate priori
 
 ---
 
+## Query File Recommendations
+
+After assigning verdicts and generating recommendations, search the `queries/` library for pre-built hunting campaigns that target the TTPs and threat patterns surfaced by today's scan. **Only run this step when at least one 🔴 or 🟠 verdict exists.**
+
+### Keyword Extraction Rules
+
+Extract search keywords deterministically from 🔴/🟠 findings:
+
+| Finding Source | Keywords to Extract |
+|---------------|--------------------|
+| Q1 (Incidents) | MITRE tactic names from `Tactics` column (e.g., "lateral movement", "credential access"), alert titles |
+| Q2/Q2b (Identity) | "anomaly", "sign-in", "identity", "phishing" if geo-novelty flags set |
+| Q3 (Identity Protection) | "risky sign-in", "token", "aitm", "phishing" if risk detail contains these |
+| Q5 (Rare Processes) | Process names from singleton chains (e.g., "mimikatz", "rclone", "psexec"), "rare process" |
+| Q7 (SPN Drift) | "service principal", "app registration", "credential" |
+| Q8 (Email) | "phishing", "email", "spam", "malware" if delivered threats > 0 |
+| Q9 (UEBA) | ActionType values (e.g., "impossible travel", "mass download", "brute force") |
+| Q10 (Auth Spray) | "brute force", "password spray", "RDP", "credential" |
+| Q12 (CVEs) | Specific CVE IDs from results, software names from `SoftwareName` column |
+
+### Search Procedure
+
+1. Collect keywords from all 🔴/🟠 domains using the extraction rules above
+2. Run `grep_search` with each keyword (or combined with `|` alternation) scoped to `queries/**`
+3. Deduplicate matched files — a file matching multiple keywords ranks higher
+4. Read the first 10 lines of each matched file to extract the title and description from the metadata header
+5. Select the **top 3–5 most relevant** files, ranked by number of keyword matches
+
+### Report Output Block
+
+Insert this section between **Recommended Actions** and **Appendix** in both inline and file reports:
+
+```markdown
+## 📂 Recommended Query Files for Follow-Up Hunting
+
+<If matching query files found:>
+
+Based on today's findings, these query files contain pre-built hunting campaigns targeting related TTPs and IOCs:
+
+| Query File | Relevance | Matched Findings |
+|-----------|-----------|------------------|
+| [<Title>](queries/<subfolder>/<filename>.md) | <matched keywords> | Q<N>: <finding summary> |
+| ... | ... | ... |
+
+> 💡 **Follow-up prompt:** Open a query file above and ask:
+> *"Run a hunting campaign against these TTPs and IOCs and summarize any key findings"*
+
+<If no matching query files found:>
+
+📂 No matching query files found for today's findings. Consider authoring new hunting queries:
+> *"Read this threat intel article: <URL> — extract TTPs and IOCs, then write, test, and tune a queries file for reusable threat hunts"*
+```
+
+**Link format:** Use workspace-relative paths — `queries/endpoint/storm_1175_medusa_ransomware_campaign.md` — so links are clickable in VS Code chat.
+
+---
+
 ## Output Modes
 
 ### Mode 1: Inline Chat Summary
@@ -796,6 +855,14 @@ Where **Incident** renders the XDR portal link: `[XDR #<ProviderIncidentId>](htt
 
 ---
 
+## 📂 Recommended Query Files for Follow-Up Hunting
+
+<Render this section per the Query File Recommendations procedure. Only appears when 🔴/🟠 verdicts exist.>
+
+<If all verdicts are ✅/🟡, omit this section entirely.>
+
+---
+
 ## Appendix: Query Execution Summary
 
 | Query | Domain | Records | Data Source | Notes |
@@ -865,6 +932,7 @@ Before rendering the final report, verify:
 - [ ] Each recommendation references a specific drill-down skill
 - [ ] Q2b fallback noted in report if custom table was unavailable
 - [ ] No fabricated data — all findings trace to actual query results
+- [ ] Query file recommendations searched for 🔴/🟠 domains (or section omitted if all ✅/🟡)
 
 ---
 
