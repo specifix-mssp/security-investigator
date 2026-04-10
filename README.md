@@ -203,7 +203,7 @@ Ad-hoc investigations naturally evolve into reusable assets. After completing an
 
 ```
 "Based on the investigation we just completed, create a new reusable skill"
-"Read this threat intel article: <URL> — extract TTPs and create a queries file"
+"Read this threat intel article: <URL> — extract TTPs and IOCs, then write, test, and tune a queries file for reusable threat hunts"
 ```
 
 ---
