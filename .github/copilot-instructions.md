@@ -646,6 +646,17 @@ See `.github/skills/mcp-usage-monitoring/SKILL.md` Queries 25-27 for detection q
 
 - **Documentation**: https://learn.microsoft.com/en-us/azure/developer/azure-mcp-server/overview
 
+### 🔍 Resource Discovery — Cross-Subscription Lookup Pattern
+
+**`config.json` only contains the primary Sentinel workspace subscription.** Resources investigated via Defender XDR (DeviceInfo, ExposureGraphNodes, alerts) often reside in **different subscriptions**. When you need to look up an Azure resource (VM, NSG, NIC, etc.) discovered through investigation queries:
+
+1. Try `config.json` subscription first → `az vm list --query "[?contains(name, '<name>')]" --subscription "<config.json sub>"`
+2. If not found → `az account list` to enumerate all subscriptions
+3. Search each subscription until found
+4. Use the discovered subscription + resource group for all subsequent ARM calls (NSG, NIC, subnet, etc.)
+
+**Why this matters:** The Defender XDR unified portal aggregates devices across ALL connected subscriptions. A device flagged in `ExposureGraphNodes` or `DeviceInfo` may live in any subscription — the `config.json` subscription is only guaranteed to contain the Log Analytics workspace. Always specify `--subscription` explicitly in Azure CLI calls to avoid defaulting to the wrong subscription context.
+
 ### Custom Sentinel Tables
 
 #### Signinlogs_Anomalies_KQL_CL
