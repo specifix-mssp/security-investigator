@@ -212,12 +212,13 @@ Estimated time: ~2–4 minutes
    c. **IOC prompt:** load `ioc-investigation` skill, execute with the target indicator
    d. Remove the completed prompt from the pool
    e. Scan results for **new evidence** (entities, IOCs, TTPs not in original Threat Pulse results) — generate new prompts if found, prepend to pool with `🆕` tag
-   f. Return to step 2
+   f. **Return to step 2 — call the interactive question tool again.** Every loop iteration MUST use `vscode_askQuestions` to present the updated pool as a selectable list. Do NOT render a markdown table/numbered list as a substitute.
 
 **Prompt pool rules:**
 - Completed prompts are removed — never re-offered
 - New evidence prompts are prepended (freshest leads first), tagged `🆕`
 - Loop ends when user selects Skip or pool empties (`✅ All follow-up actions completed.`)
+- **🔴 PROHIBITED:** Rendering the prompt pool as a markdown table, numbered list, or plain text instead of calling `vscode_askQuestions`. Every iteration — including after the first follow-up completes — MUST use the interactive question tool so options are clickable. This is the #1 loop-breaking mistake.
 
 ---
 
