@@ -1,6 +1,8 @@
 ---
 name: authentication-tracing
 description: Use this skill when asked to trace authentication flows, analyze SessionId chains, investigate token reuse vs interactive MFA, or assess geographic anomalies in sign-ins. Triggers on keywords like "trace authentication", "trace back to interactive MFA", "SessionId analysis", "token reuse", "geographic anomaly", "impossible travel", or when investigating suspicious sign-in locations. This skill provides forensic analysis of Entra ID authentication chains to distinguish legitimate activity from credential/token theft.
+threat_pulse_domains: [identity]
+drill_down_prompt: 'Trace authentication chain for {entity} — SessionId analysis, token reuse, geographic anomalies'
 ---
 
 # Authentication Tracing - Instructions

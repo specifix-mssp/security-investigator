@@ -1,6 +1,8 @@
 ---
 name: data-security-analysis
 description: 'Use this skill when asked to analyze data security events, sensitive information type (SIT) access patterns, sensitivity label access patterns, DLP policy matches, or Purview insider risk activity. Triggers on keywords like "data security", "sensitive information type", "SIT access", "who accessed sensitive data", "DLP events", "DataSecurityEvents", "EDM access", "exact data match", "credit card access", "sensitive file access", "insider risk activity", "Purview data security", "SIT breakdown", "classify access", "sensitivity label", "labeled documents", "label downgrade", "label change", "Copilot label exposure", or when investigating which users accessed documents containing specific sensitive information types or sensitivity labels. This skill queries DataSecurityEvents in Advanced Hunting to produce comprehensive SIT and sensitivity label access analysis including volume breakdowns, user-level drill-downs, file inventories, action type distribution, DLP policy correlation, label change tracking, Copilot label exposure, temporal patterns, and risk-ranked user summaries. Supports inline chat and markdown file output. Designed for large environments (100k+ users) with aggressive summarization and tiered drill-down.'
+threat_pulse_domains: [admin, cloud]
+drill_down_prompt: 'Analyze data security events — SIT access patterns, label changes, DLP policy matches'
 ---
 
 # Data Security Events Analysis — Instructions

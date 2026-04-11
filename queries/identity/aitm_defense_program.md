@@ -5,6 +5,7 @@
 **Tables:** SigninLogs, EntraIdSignInEvents, AADUserRiskEvents, AuditLogs, SecurityAlert, SecurityIncident, OfficeActivity, CloudAppEvents, EmailEvents, UrlClickEvents, IdentityLogonEvents, DeviceEvents, AlertInfo, AlertEvidence  
 **Keywords:** AiTM, adversary-in-the-middle, token theft, session cookie, phishing resistant, FIDO2, passkey, Evilginx, token replay, BEC, MFA bypass, attack disruption, compliant network, Global Secure Access, token protection, CAE, continuous access evaluation, risky sign-in, anomaly, sign-in  
 **MITRE:** T1557, T1539, T1528, T1550.004, T1114.003, T1098, T1078, TA0006, TA0001, TA0009  
+**Domains:** identity, email  
 **Timeframe:** Last 30 days (configurable)
 
 ---

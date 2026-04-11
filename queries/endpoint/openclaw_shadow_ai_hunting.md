@@ -5,6 +5,7 @@
 **Tables:** DeviceProcessEvents, DeviceNetworkEvents, DeviceFileEvents, DeviceCustomFileEvents, DeviceCustomScriptEvents, DeviceCustomImageLoadEvents, SecurityAlert  
 **Keywords:** openclaw, shadow AI, AI agent, telegram bot, node.js, npm, gateway, persistence, scheduled task, startup folder, clipboard access, self-hosted AI, process chain, C2, device pairing  
 **MITRE:** T1053.005, T1547.001, T1059.001, T1071.001, T1071.004, T1564.001, T1119, T1132, TA0003, TA0011  
+**Domains:** endpoint  
 **Timeframe:** Last 90 days (configurable)
 
 ---

@@ -1,6 +1,8 @@
 ---
 name: user-investigation
 description: Use this skill when asked to investigate a user account for security issues, suspicious activity, or compliance review. Triggers on keywords like "investigate user", "security investigation", "user investigation", "check user activity", "analyze sign-ins", or when a UPN/email is mentioned with investigation context. This skill provides comprehensive Entra ID user security analysis including sign-in anomalies, MFA status, device compliance, audit logs, security incidents, Identity Protection risk, and automated reports (HTML, markdown file, or inline chat).
+threat_pulse_domains: [identity]
+drill_down_prompt: 'Investigate user {entity} — sign-in anomalies, MFA, audit trail, Identity Protection risk'
 ---
 
 # User Security Investigation - Instructions

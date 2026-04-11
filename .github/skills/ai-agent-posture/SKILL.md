@@ -1,6 +1,8 @@
 ---
 name: ai-agent-posture
 description: 'Use this skill when asked to audit, assess, or report on AI agent security posture across Copilot Studio and Microsoft 365 Copilot agents. Triggers on keywords like "AI agent posture", "agent security audit", "Copilot Studio agents", "agent inventory", "agent authentication", "unauthenticated agents", "agent tools", "MCP tools on agents", "agent knowledge sources", "XPIA risk", "agent sprawl", "AI agent risk", "agent governance", or when investigating AI agent configurations, access policies, tool permissions, or credential exposure. This skill queries the AIAgentsInfo table in Advanced Hunting to produce a comprehensive security posture assessment covering agent inventory, authentication gaps, access control misconfigurations, MCP tool proliferation, knowledge source exposure, XPIA email exfiltration risk, hard-coded credential detection, HTTP request risks, creator governance, and agent sprawl analysis. Supports inline chat and markdown file output.'
+threat_pulse_domains: [admin, cloud]
+drill_down_prompt: 'Run AI agent security audit — agent inventory, authentication gaps, tool permissions'
 ---
 
 # AI Agent Security Posture — Instructions

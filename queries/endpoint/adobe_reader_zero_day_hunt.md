@@ -5,6 +5,7 @@
 **Tables:** DeviceNetworkEvents, DeviceFileEvents, DeviceProcessEvents, DeviceCustomFileEvents, DeviceCustomScriptEvents, EmailAttachmentInfo  
 **Keywords:** Adobe Reader, AcroRd32, Acrobat, PDF exploit, zero-day, CVE, RSS.addFeed, util.readFileIntoStream, NTLM leak, SMB, fingerprinting, sandbox escape, RCE, JavaScript obfuscation, CDC  
 **MITRE:** T1203, T1059.007, T1005, T1082, T1041, T1071.001, T1187, T1566.001  
+**Domains:** endpoint, email  
 **Timeframe:** Last 30 days (configurable)
 
 ---

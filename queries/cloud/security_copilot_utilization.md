@@ -5,6 +5,7 @@
 **Tables:** CloudAppEvents  
 **Keywords:** Security Copilot, SCU, security compute units, analyst usage, prompt tracking, session analysis, capacity planning, agent usage, plugin management, promptbook, CopilotInteraction  
 **MITRE:** TA0043  
+**Domains:** admin  
 **Timeframe:** Last 30 days (configurable)
 
 ---

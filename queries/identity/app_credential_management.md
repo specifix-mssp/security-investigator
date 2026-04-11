@@ -5,6 +5,7 @@
 **Tables:** AuditLogs  
 **Keywords:** credential, secret, certificate, key, password, app registration, service principal, ownership, consent, permission, persistence, ApplicationManagement  
 **MITRE:** T1098.001, T1136.003, T1550.001, TA0003  
+**Domains:** spn, admin  
 **Timeframe:** Last 90 days (configurable)
 
 ---

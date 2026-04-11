@@ -5,6 +5,7 @@
 **Tables:** DeviceProcessEvents  
 **Keywords:** rare process, parent child, process chain, LOLBin, discovery, reconnaissance, threat hunting, Pareto, process tree, ipconfig, whoami, unusual execution  
 **MITRE:** T1016, T1033, T1057, T1059, T1087, TA0007, TA0002  
+**Domains:** endpoint  
 **Timeframe:** Last 90 days (configurable)
 
 ---

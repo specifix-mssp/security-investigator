@@ -5,6 +5,7 @@
 **Tables:** DeviceFileEvents, DeviceProcessEvents, DeviceRegistryEvents  
 **Keywords:** startup folder, persistence, autostart, boot or logon, Start Menu, msbuild masquerade, file write, baseline, outlier, registry run key, CurrentVersion Run, T1547.001, Sysmon EventID 11  
 **MITRE:** T1547.001, T1036.005  
+**Domains:** endpoint  
 **Timeframe:** Last 30 days (configurable)
 
 ---

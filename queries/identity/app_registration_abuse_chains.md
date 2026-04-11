@@ -5,6 +5,7 @@
 **Tables:** AuditLogs, AADServicePrincipalSignInLogs, AADUserRiskEvents, MicrosoftGraphActivityLogs  
 **Keywords:** app registration, service principal, credential abuse, ownership hijack, SolarWinds, persistence, lateral movement, consent grant, secret, certificate, cross-tenant, kill chain  
 **MITRE:** T1098.001, T1098.003, T1078.004, T1550.001, T1606.002, T1656, TA0003, TA0004, TA0008  
+**Domains:** spn, admin  
 **Timeframe:** Last 30 days (configurable)
 
 ---

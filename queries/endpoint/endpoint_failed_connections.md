@@ -5,6 +5,7 @@
 **Tables:** DeviceLogonEvents, DeviceNetworkEvents  
 **Keywords:** failed logon, brute force, password spray, failed connection, port scan, blocked attack, endpoint, device, RDP  
 **MITRE:** T1110, T1046, TA0006, TA0007  
+**Domains:** endpoint, identity  
 **Timeframe:** Last 14 days (configurable)
 
 ---
@@ -197,6 +198,8 @@ Assessment: Legitimate CDN traffic, not an attack
 ```
 
 **Note:** This query may return very few results in well-protected environments. The real external threats often appear in Query 1 (authentication layer) after passing network security.
+
+> **⚠️ FourToSixMapping note:** This query uses RFC1918 exclusion filters (not `RemoteIPType == "Public"`), which correctly catches all non-private IPs regardless of MDE's dual-stack classification. However, if adapting this query to use `RemoteIPType` filtering instead, be aware that IIS and other dual-stack listeners cause MDE to classify inbound IPv4 connections as `FourToSixMapping` rather than `Public`. Always include both: `RemoteIPType in ("Public", "FourToSixMapping")`. See `queries/network/internet_exposure_analysis.md` for full details.
 
 ---
 

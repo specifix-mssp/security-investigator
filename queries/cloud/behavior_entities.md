@@ -5,6 +5,7 @@
 **Tables:** BehaviorEntities, BehaviorInfo  
 **Keywords:** behavior, UEBA, MCAS, impossible travel, brute force, mass download, OAuth credential, container drift, malware, K8s, entity decomposition, below-threshold  
 **MITRE:** T1078, T1078.004, T1098, T1098.001, T1110, T1110.001, T1074, TA0001, TA0003, TA0006, TA0009  
+**Domains:** identity, endpoint, cloud  
 **Timeframe:** Last 30 days (configurable, AH max retention)
 
 ---

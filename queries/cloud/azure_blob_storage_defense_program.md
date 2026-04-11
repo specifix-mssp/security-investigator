@@ -5,6 +5,7 @@
 **Tables:** StorageBlobLogs, AzureActivity, StorageMalwareScanningResults, CloudStorageAggregatedEvents, SecurityAlert, SecurityIncident, AuditLogs, SigninLogs, AADNonInteractiveUserSignInLogs  
 **Keywords:** blob storage, Azure Storage, exfiltration, credential access, SAS token, storage account key, AzCopy, reconnaissance, data destruction, ransomware, malware upload, anonymous access, container enumeration, lateral movement, defense evasion, data poisoning, C2, command and control, phishing hosting  
 **MITRE:** T1593.002, T1594, T1595.003, T1596, T1596.001, T1583.004, T1566.001, T1566.002, T1078.004, T1098.001, T1562.001, T1562.007, T1528, T1003, T1040, T1580, T1619, T1021.007, T1074.002, T1530, T1105, T1567.002, T1030, T1020, T1537, T1485, T1486, T1565  
+**Domains:** cloud, exposure  
 **Timeframe:** Last 30 days (configurable)
 
 ---

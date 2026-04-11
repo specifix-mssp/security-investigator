@@ -1,6 +1,8 @@
 ---
 name: scope-drift-detection-user
 description: 'Use this skill when asked to detect scope drift, behavioral expansion, or gradual privilege/access creep in user accounts. Triggers on keywords like "user drift", "user behavioral change", "user scope drift", "user baseline deviation", "user access expansion", or when investigating whether a user account has gradually expanded beyond its established behavioral baseline. This skill builds a 90-day behavioral baseline for both interactive and non-interactive sign-ins, compares with 7-day recent activity, computes weighted Drift Scores (7 dimensions for interactive, 6 for non-interactive), and correlates with SecurityAlert, AuditLogs, Identity Protection, custom anomaly tables, CloudAppEvents (cloud app activity drift), and EmailEvents (email pattern drift).'
+threat_pulse_domains: [identity]
+drill_down_prompt: 'Analyze user behavioral drift for {entity} — sign-in pattern changes, app usage shifts'
 ---
 
 # User Account Scope Drift Detection — Instructions

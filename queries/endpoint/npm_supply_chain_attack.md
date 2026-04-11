@@ -5,6 +5,7 @@
 **Tables:** DeviceProcessEvents, DeviceFileEvents, DeviceNetworkEvents, DeviceEvents, DeviceRegistryEvents, DeviceCustomFileEvents, DeviceCustomScriptEvents, ASimDnsActivityLogs, DeviceTvmSoftwareInventory, CloudProcessEvents  
 **Keywords:** axios, npm, npm install, supply chain, plain-crypto-js, postinstall, setup.js, sfrclak, wt.exe, node.exe, node_modules, RAT, credential stealer, C2 beacon, PowerShell masquerade, VBScript dropper, cross-platform RAT, yarn, pnpm, npx, package-lock.json, yarn.lock, pnpm-lock.yaml, Sapphire Sleet, BlueNoroff, North Korea, DPRK  
 **MITRE:** T1195.002, T1059.007, T1059.001, T1059.005, T1027, T1036.005, T1547.001, T1041, T1071.001, T1082, T1005, T1552.001, T1070.004  
+**Domains:** endpoint  
 **Timeframe:** Last 30 days (configurable)
 
 ---

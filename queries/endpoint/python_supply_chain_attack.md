@@ -5,6 +5,7 @@
 **Tables:** DeviceProcessEvents, DeviceFileEvents, DeviceNetworkEvents, ASimDnsActivityLogs, DeviceEvents, DeviceRegistryEvents, CloudAppEvents, DeviceTvmSoftwareInventory  
 **Keywords:** litellm, pypi, pip install, supply chain, credential stealer, python package, site-packages, .pth file, secret exfiltration, environment variable harvesting, cloud credential theft, models.litellm.cloud, checkmarx.zone, trivy, CI/CD compromise, sysmon.py, node-setup, kubernetes lateral movement, fork bomb, uvx, MCP server, transitive dependency, TeamPCP, aquasecurtiy.org, GitHub Actions tag poisoning, mutable tags, startup folder, msbuild masquerade, wav steganography  
 **MITRE:** T1195.002, T1059.006, T1027, T1555, T1552.001, T1041, T1071.001, T1547.001, T1547.004, T1082, T1083, T1005, T1543.002, T1610, T1552.007, T1499.004, T1036.005  
+**Domains:** endpoint  
 **Timeframe:** Last 30 days (configurable)
 
 ---

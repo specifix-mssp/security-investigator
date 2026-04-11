@@ -1,6 +1,8 @@
 ---
 name: ca-policy-investigation
 description: Use this skill when asked to investigate Conditional Access policy changes, sign-in failures related to CA policies (error codes 53000, 50074, 530032), or suspected policy bypass/manipulation. Triggers on keywords like "Conditional Access", "CA policy", "device compliance", "policy bypass", "53000", "50074", or when investigating why a user was blocked then suddenly unblocked. This skill provides forensic analysis of CA policy modifications correlated with sign-in failures.
+threat_pulse_domains: [identity]
+drill_down_prompt: 'Investigate Conditional Access policy changes — sign-in correlation, bypass detection'
 ---
 
 # Conditional Access Policy Investigation - Instructions

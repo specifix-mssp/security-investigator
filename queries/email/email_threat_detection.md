@@ -5,6 +5,7 @@
 **Tables:** EmailEvents, EmailPostDeliveryEvents, EmailUrlInfo, EmailAttachmentInfo, UrlClickEvents  
 **Keywords:** email, phishing, AiTM, adversary-in-the-middle, BEC, business email compromise, spam, malware, ZAP, inbox rule, attachment, URL click, Safe Links, first contact, DMARC, DKIM, SPF, authentication, forwarding, detection methods  
 **MITRE:** T1566.001, T1566.002, T1598, T1114.003, T1534, T1020, TA0001, TA0009, TA0010  
+**Domains:** email  
 **Timeframe:** Last 30 days (configurable)
 
 ---

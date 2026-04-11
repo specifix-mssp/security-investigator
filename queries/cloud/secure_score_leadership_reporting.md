@@ -5,6 +5,7 @@
 **Tables:** SecureScores, SecureScoreControls, SecurityRecommendation  
 **Keywords:** secure score, defender for cloud, leadership report, score improvement, posture, compliance, security controls, remediation, continuous export, score trend  
 **MITRE:** TA0040, TA0005  
+**Domains:** exposure  
 **Timeframe:** Last 90 days (configurable)  
 
 ---

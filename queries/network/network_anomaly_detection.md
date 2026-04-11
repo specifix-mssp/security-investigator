@@ -5,6 +5,7 @@
 **Tables:** DeviceNetworkEvents  
 **Keywords:** anomaly detection, series_decompose_anomalies, time series, baseline deviation, rare IP, honeypot, reconnaissance, scanning, botnet  
 **MITRE:** T1046, T1595, TA0043  
+**Domains:** endpoint  
 **Timeframe:** Last 7 days (configurable)
 
 ---

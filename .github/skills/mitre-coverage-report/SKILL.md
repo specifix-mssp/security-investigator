@@ -1,6 +1,8 @@
 ---
 name: mitre-coverage-report
 description: 'MITRE ATT&CK Coverage Report — YAML-driven PowerShell pipeline gathers analytic rule MITRE tags, custom detection techniques, SOC Optimization recommendations, and alert/incident operational data via az rest/az monitor/Graph API, writes a deterministic scratchpad, LLM renders the report. Covers tactic-level coverage matrix, technique-level drill-down with rule mapping, coverage gap identification, SOC Optimization threat scenario alignment, untagged rule remediation, ICS/OT technique tracking, and MITRE Coverage Score (5 weighted dimensions). Inline chat and markdown file output.'
+threat_pulse_domains: [incidents]
+drill_down_prompt: 'Run MITRE ATT&CK coverage report — tactic/technique coverage, gaps, SOC optimization'
 ---
 
 # MITRE ATT&CK Coverage Report — Instructions

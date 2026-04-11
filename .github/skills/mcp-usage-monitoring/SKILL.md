@@ -1,6 +1,8 @@
 ---
 name: mcp-usage-monitoring
 description: 'Use this skill when asked to monitor, audit, or analyze MCP (Model Context Protocol) server usage in the environment. Triggers on keywords like "MCP usage", "MCP server monitoring", "MCP activity", "Graph MCP", "Sentinel MCP", "Azure MCP", "MCP audit", "tool usage monitoring", "MCP breakdown", "who is using MCP", or when investigating MCP user activity, Graph API calls from MCP servers, or workspace query governance. This skill provides comprehensive MCP server telemetry analysis across Graph MCP, Sentinel MCP, and Azure MCP servers including usage trends, endpoint access patterns, user attribution, cross-server user analysis, sensitive API detection, workspace query governance, and security risk assessment with inline and markdown file reporting.'
+threat_pulse_domains: [admin]
+drill_down_prompt: 'Run MCP usage monitoring report — Graph/Sentinel/Azure MCP activity, user attribution'
 ---
 
 # MCP Server Usage Monitoring — Instructions

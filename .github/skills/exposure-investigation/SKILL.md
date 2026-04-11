@@ -1,6 +1,8 @@
 ---
 name: exposure-investigation
 description: 'Use this skill when asked to generate a vulnerability and exposure management report, assess security posture, or review CVEs, security configurations, and attack paths. Triggers on keywords like "vulnerability report", "exposure report", "CVE assessment", "security posture", "vulnerability assessment", "exposure management", "patch status", "end of support", "security recommendations", "attack paths", "critical assets", "configuration compliance", "Defender device health", "security score", "TVM", "threat and vulnerability management", or when asking about overall organizational vulnerability/exposure state. This skill queries DeviceTvm* tables and ExposureGraphNodes/Edges to produce a comprehensive posture report covering CVEs, exploitable vulnerabilities, security configuration compliance, end-of-support software, critical asset inventory, attack paths, Defender device health, and certificate status. Supports org-wide and per-device scoping with inline chat and markdown file output.'
+threat_pulse_domains: [exposure]
+drill_down_prompt: 'Run vulnerability and exposure report — CVEs, attack paths, critical assets, configuration compliance'
 ---
 
 # Vulnerability & Exposure Management Report — Instructions

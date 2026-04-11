@@ -1,6 +1,8 @@
 ---
 name: app-registration-posture
 description: 'Use this skill when asked to audit, assess, or report on app registration and service principal security posture in Entra ID. Triggers on keywords like "app registration posture", "app registration abuse", "service principal permissions", "dangerous app permissions", "app ownership", "app credential abuse", "SPN lateral movement", "app consent grant", "overprivileged apps", "cross-tenant SPN", "app registration kill chain", "app persistence", "credential add chain", "app registration security", "Graph API permissions audit", or when investigating app registration ownership, credential rotation patterns, permission escalation chains, cross-tenant service principal access, or compromised user to app abuse paths. This skill combines Graph API posture inventory (current-state dangerous permission grants, app ownership, credential hygiene) with KQL chain detection queries (AuditLogs, AADServicePrincipalSignInLogs, AADUserRiskEvents, MicrosoftGraphActivityLogs) to produce a comprehensive app registration security posture assessment covering permission concentration, owner risk, credential hygiene, cross-tenant exposure, and active abuse signal detection. App Permission Risk Score with 5 dimensions. Supports inline chat and markdown file output.'
+threat_pulse_domains: [spn, admin]
+drill_down_prompt: 'Run app registration posture audit — dangerous permissions, credential hygiene, abuse chains'
 ---
 
 # App Registration Security Posture — Instructions

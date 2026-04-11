@@ -1,6 +1,8 @@
 ---
 name: computer-investigation
 description: Use this skill when asked to investigate a computer, device, endpoint, or machine for security issues, suspicious activity, malware, or compliance review. Triggers on keywords like "investigate computer", "investigate device", "investigate endpoint", "check machine", "device security", "endpoint investigation", or when a device name/hostname is mentioned with investigation context. This skill provides comprehensive device security analysis including Defender alerts, sign-in patterns, logged-on users, vulnerabilities, software inventory, compliance status, network activity, and automated investigation tracking for Entra Joined, Hybrid Joined, and Entra Registered devices.
+threat_pulse_domains: [endpoint]
+drill_down_prompt: 'Investigate device {entity} — Defender alerts, process activity, vulnerabilities, compliance'
 ---
 
 # Computer Security Investigation - Instructions

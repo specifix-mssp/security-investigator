@@ -1,6 +1,8 @@
 ---
 name: honeypot-investigation
 description: Use this skill when asked to analyze, investigate, or report on honeypot server security. Triggers on keywords like "honeypot investigation", "analyze honeypot", "honeypot security", "honeypot report", or when a server name is mentioned with honeypot analysis context. This skill provides comprehensive security analysis including attack patterns, threat intelligence correlation, IP enrichment, vulnerability assessment, and executive report generation.
+threat_pulse_domains: [endpoint, exposure]
+drill_down_prompt: 'Investigate honeypot {entity} — attack patterns, threat intel, vulnerability assessment'
 ---
 
 # Honeypot Investigation Agent - Instructions

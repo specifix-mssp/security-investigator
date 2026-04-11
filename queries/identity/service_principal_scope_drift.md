@@ -5,6 +5,7 @@
 **Tables:** AADServicePrincipalSignInLogs, AuditLogs, DeviceNetworkEvents, SecurityAlert  
 **Keywords:** service principal, scope drift, behavioral baseline, drift score, anomaly, automation account, credential, permission escalation, resource access, lateral movement  
 **MITRE:** T1078.004, T1098.001, T1550.001, T1071, TA0003, TA0004, TA0008  
+**Domains:** spn  
 **Timeframe:** 90-day baseline vs last 7 days (configurable)
 
 ---

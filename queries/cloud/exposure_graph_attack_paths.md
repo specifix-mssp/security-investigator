@@ -1,24 +1,196 @@
 # ExposureGraph Critical Assets & Attack Paths - Complete Query Library
 
 **Created:** 2026-01-15  
-**Updated:** 2026-02-12  
+**Updated:** 2026-04-10  
 **Platform:** Microsoft Defender XDR | Azure Resource Graph  
 **Tables:** ExposureGraphNodes, ExposureGraphEdges, securityresources (ARG)  
-**Keywords:** exposure graph, critical assets, attack paths, vulnerabilities, RCE, privilege escalation, internet-facing, cloud resources, Azure, AWS, GCP, identity, storage, entra-userCookie, cookie chain, choke point, blast radius, highRiskVulnerabilityInsights, Key Vault, OpenAI, permissions, Owner, Contributor, Secrets Officer  
+**Keywords:** exposure graph, critical assets, attack paths, vulnerabilities, RCE, privilege escalation, internet-facing, cloud resources, Azure, AWS, GCP, identity, storage, entra-userCookie, cookie chain, choke point, blast radius, highRiskVulnerabilityInsights, Key Vault, OpenAI, permissions, Owner, Contributor, Secrets Officer, graph_find_blastradius, graph_exposure_perimeter, graph_find_walkable_paths, graph_find_connected_nodes, Sentinel Graph MCP  
 **MITRE:** T1068, T1190, T1078, T1550.004, T1539, T1552.001, TA0004, TA0001, TA0006, TA0008  
+**Domains:** exposure  
 **Timeframe:** Point-in-time (snapshot data)
 
 ---
 
 ## 📋 Overview
 
-This guide provides comprehensive KQL queries for finding critical assets and analyzing attack paths using the **ExposureGraphNodes** and **ExposureGraphEdges** tables in Microsoft Defender XDR Advanced Hunting, plus **Azure Resource Graph** queries for pre-computed cloud attack paths.
+This guide covers two approaches for analyzing the Exposure Management attack surface:
 
-**32 production-ready queries** organized into 12 sections for security operations.
+1. **Sentinel Graph MCP Tools** (recommended first pass) — purpose-built blast radius, exposure perimeter, walkable path, and connected node tools that return structured multi-hop results instantly. Start here for rapid triage.
+2. **KQL Queries** (deep dive / reference) — 32 production-ready queries against `ExposureGraphNodes` and `ExposureGraphEdges` tables in Advanced Hunting, plus Azure Resource Graph queries. Use these for custom analysis, fleet-wide sweeps, and scenarios the MCP tools don't cover.
 
 ---
 
-## 🎯 Query Categories
+## 🚀 Sentinel Graph MCP Tools — Recommended First Pass
+
+The Sentinel Exposure Graph MCP server provides four specialized tools that operate directly on the ExposureGraph. These are **faster and more effective** than raw KQL for common attack path scenarios — they handle multi-hop traversal, permission chain resolution, and criticality correlation automatically.
+
+**When to use MCP tools vs KQL:**
+
+| Scenario | Use MCP Tools | Use KQL |
+|----------|---------------|---------|
+| "What can this compromised device reach?" | `graph_find_blastradius` | — |
+| "What's exposed to the internet that can reach this target?" | `graph_exposure_perimeter` | — |
+| "Show the full path from device A to resource B" | `graph_find_walkable_paths` | — |
+| "What storage accounts are 2 hops from this VM?" | `graph_find_connected_nodes` | — |
+| Fleet-wide critical asset inventory | — | Query 1–4 |
+| Cookie chain analysis across all devices | — | Queries 21–25 |
+| Choke point detection (users in most paths) | — | Query 30 |
+| Permission role distribution across all paths | — | Queries 26–28 |
+| Azure Resource Graph pre-computed attack paths | — | Queries 31–32 |
+| Custom multi-join analysis or aggregation | — | Any custom KQL |
+
+### Tool 1: `graph_find_blastradius`
+
+**Purpose:** Given a source asset (device, identity, etc.), discover all downstream targets reachable via walkable edges (managed identity auth, permissions, cookie chains, group membership). Returns full multi-hop paths with criticality, risk score, and vulnerability status at each node.
+
+**Parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `sourceName` | Yes | Name of the source node (e.g., `alpine-srv1`, a username, a SPN name) |
+
+**Example:**
+```
+graph_find_blastradius(sourceName="alpine-srv1")
+```
+
+**Returns:** Array of walkable paths, each containing ordered steps:
+- `StepIndex` — hop number (0 = source)
+- `SourceNodeName/Label` → `EdgeLabel` → `TargetNodeName/Label`
+- `Criticality` — target asset criticality level (0 = highest)
+- `HasVulnerabilities` — whether target has known CVEs
+
+**Typical attack chains discovered:**
+```
+Device → can authenticate as → ManagedIdentity → has permissions to → StorageAccount (Contributor)
+Device → contains → entra-userCookie → can authenticate as → User → has permissions to → KeyVault
+```
+
+**When results are most valuable:**
+- Source device is under active attack (brute-force, anomalous behavior)
+- Source device has high-severity CVEs (entry point for exploitation)
+- Investigating blast radius after a confirmed compromise
+
+---
+
+### Tool 2: `graph_exposure_perimeter`
+
+**Purpose:** Given a target asset, find the **inbound exposure perimeter** — the set of internet-facing or externally-reachable nodes that have walkable paths TO the target. This is the inverse of blast radius: "what entry points can reach this critical asset?"
+
+**Parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `targetName` | Yes | Name of the target node to find exposure paths to |
+
+**Example:**
+```
+graph_exposure_perimeter(targetName="main-dc.zava-corp.com")
+```
+
+**Returns:** Array of perimeter nodes with:
+- `NodeName/Label` — the externally-reachable entry point
+- `Criticality`, `RiskScore`, `HasVulnerabilities`
+- `NumberOfAllNeighbours` — connectivity degree
+- `Edges` — the edges connecting this perimeter node
+
+**Known limitation:** This tool may return empty results for assets that ARE network-reachable (confirmed via public IP routing and brute-force traffic) but don't have formal ExposureGraph perimeter classification. When empty, fall back to KQL edge analysis:
+```kql
+ExposureGraphEdges
+| where TargetNodeName == "<asset>"
+| where EdgeLabel == "routes traffic to"
+| project SourceNodeName, SourceNodeLabel
+```
+
+---
+
+### Tool 3: `graph_find_walkable_paths`
+
+**Purpose:** Find the specific walkable path(s) between a known source and a known target. Returns full node and edge detail including RBAC role assignments on permission edges.
+
+**Parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `sourceName` | Yes | Source node name |
+| `targetName` | Yes | Target node name |
+
+**Example:**
+```
+graph_find_walkable_paths(sourceName="alpine-srv1", targetName="mdcd4aistorage1")
+```
+
+**Returns:** Ordered nodes and edges with full permission detail:
+- Each node includes `Criticality`, `RiskScore`, `NumberOfAllNeighbours`
+- Permission edges include `roles[]` with role name, actions, dataActions, and roleAssignmentId
+- Flags like `isOverProvisioned` and `isIdentityInactive` on connected identities
+
+**Best for:** Validating a suspected attack path end-to-end, documenting the exact permission chain for remediation, identifying over-provisioned identities along the path.
+
+---
+
+### Tool 4: `graph_find_connected_nodes`
+
+**Purpose:** Find all nodes of a specific type within N hops of a source node. Useful for discovering what resources a compromised asset can reach by type (storage accounts, VMs, key vaults, etc.).
+
+**Parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `sourceName` | Yes | Source node name |
+| `sourceNodeLabel` | Yes | Source node type (e.g., `microsoft.compute/virtualmachines`) |
+| `targetNodeLabel` | Yes | Target node type to search for (e.g., `microsoft.storage/storageaccounts`) |
+| `maxHops` | Yes | Maximum traversal depth (1–3 recommended; higher = very large result sets) |
+
+**Example:**
+```
+graph_find_connected_nodes(
+    sourceName="alpine-srv1",
+    sourceNodeLabel="microsoft.compute/virtualmachines",
+    targetNodeLabel="microsoft.storage/storageaccounts",
+    maxHops=2
+)
+```
+
+**Returns:** All matching target nodes with full edge detail, including:
+- Permission roles and whether identities are over-provisioned or inactive
+- Group memberships and role inheritance chains
+- Criticality levels on discovered nodes
+
+**⚠️ Large result sets:** With `maxHops=2` on connected assets, this can return 1MB+ of data. Use targeted `targetNodeLabel` filters to constrain results.
+
+---
+
+### Tool 5: `graph_get_context`
+
+**Purpose:** Retrieve the full graph schema — all node types, edge types, and their relationships. Use this before querying if you need to discover available `NodeLabel` or `EdgeLabel` values.
+
+**Parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `GraphName` | Yes | Always use `SystemScenarioEKGGraph` |
+
+**Example:**
+```
+graph_get_context(GraphName="SystemScenarioEKGGraph")
+```
+
+---
+
+### Recommended MCP Workflow for Asset Investigation
+
+When investigating a specific asset (e.g., a device under attack, a compromised identity):
+
+1. **Blast radius first:** `graph_find_blastradius(sourceName="<asset>")` — what can it reach?
+2. **Exposure perimeter:** `graph_exposure_perimeter(targetName="<asset>")` — what entry points lead here?
+3. **Specific paths:** If blast radius reveals a critical target, `graph_find_walkable_paths(sourceName="<asset>", targetName="<critical-target>")` — get the full chain with permissions
+4. **Type-specific discovery:** `graph_find_connected_nodes(...)` — find all key vaults, storage accounts, or VMs within reach
+5. **Deep dive:** Use the KQL queries below for fleet-wide analysis, custom joins, or scenarios not covered by the MCP tools
+
+---
+
+## 🎯 KQL Query Categories (Deep Dive / Reference)
 
 ### 1. Critical Devices & Assets (Queries 1-4)
 - **Query 1**: All critical devices (criticality < 4)

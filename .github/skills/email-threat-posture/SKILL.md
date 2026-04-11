@@ -1,6 +1,8 @@
 ---
 name: email-threat-posture
 description: 'Use this skill when asked to generate an email threat protection report, assess email security posture, or analyze email-based threats across the organization. Triggers on keywords like "email threat report", "email security posture", "email protection dashboard", "phishing report", "email threat summary", "MDO report", "Defender for Office 365 report", "email security assessment", "ZAP effectiveness", "Safe Links report", "email authentication report", "DMARC report", "spam report", "email volume report", or when asked to provide C-level visibility into email threat protection status. This skill queries EmailEvents, EmailPostDeliveryEvents, UrlClickEvents, and EmailAttachmentInfo tables in Advanced Hunting to produce a comprehensive email security posture assessment covering inbound mail flow, threat composition, phishing detection, email authentication (DMARC/DKIM/SPF), post-delivery remediation (ZAP), Safe Links click protection, attachment analysis, detection method effectiveness, and delivery disposition. Supports inline chat, markdown file, and SVG dashboard output.'
+threat_pulse_domains: [email]
+drill_down_prompt: 'Run email threat posture report — phishing trends, delivery gaps, protection effectiveness'
 ---
 
 # Email Threat Protection Posture — Instructions

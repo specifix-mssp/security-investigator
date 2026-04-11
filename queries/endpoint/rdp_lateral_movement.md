@@ -5,6 +5,7 @@
 **Tables:** SecurityEvent  
 **Keywords:** RDP, lateral movement, brute force, password spray, credential stuffing, failed logon, remote desktop, EventID 4624, EventID 4625, LogonType 10  
 **MITRE:** T1021.001, TA0008  
+**Domains:** endpoint, identity  
 **Timeframe:** Last 7 days (configurable)
 
 ---

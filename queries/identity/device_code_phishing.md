@@ -5,6 +5,7 @@
 **Tables:** EntraIdSignInEvents, CloudAppEvents, UrlClickEvents, SigninLogs, AADNonInteractiveUserSignInLogs  
 **Keywords:** device code phishing, EvilToken, PhaaS, OAuth device authorization, token theft, dynamic code generation, device registration, inbox rules, email exfiltration, Graph API reconnaissance, Railway.com, Vercel, Cloudflare Workers, browser-in-the-browser, clipboard hijack, 50199, Cmsi:cmsi, MailItemsAccessed, PRT persistence  
 **MITRE:** T1566.002, T1528, T1550.001, T1098.005, T1114.002, T1114.003, T1071.001, T1087.003, T1098  
+**Domains:** identity, email  
 **Timeframe:** Last 30 days (configurable)
 
 ---

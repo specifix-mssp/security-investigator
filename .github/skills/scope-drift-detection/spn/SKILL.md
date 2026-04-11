@@ -1,6 +1,8 @@
 ---
 name: scope-drift-detection-spn
 description: 'Use this skill when asked to detect scope drift, behavioral expansion, or gradual privilege/access creep in service principals or automation accounts. Triggers on keywords like "scope drift", "service principal drift", "SPN behavioral change", "automation account drift", "baseline deviation", "access expansion", or when investigating whether a service principal has gradually expanded beyond its intended purpose. This skill builds a 90-day behavioral baseline per SPN, compares it with 7-day recent activity, computes a weighted Drift Score across 5 dimensions, and correlates with SecurityAlert and AuditLogs for corroborating evidence.'
+threat_pulse_domains: [spn]
+drill_down_prompt: 'Analyze service principal drift for {entity} — resource/IP/location expansion'
 ---
 
 # Service Principal Scope Drift Detection — Instructions

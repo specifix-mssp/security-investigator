@@ -5,6 +5,7 @@
 **Tables:** ExposureGraphNodes, ExposureGraphEdges, DeviceNetworkEvents, DeviceNetworkInfo  
 **Keywords:** internet exposure, public IP, customer-facing, inbound connections, RDP, SSH, firewall rules, NSG, attack surface, listening ports, exposure score, network scanning  
 **MITRE:** T1190, T1133, T1021.001, T1021.004, TA0001, TA0043  
+**Domains:** exposure  
 **Timeframe:** Last 7-30 days (configurable)  
 
 ---
@@ -21,6 +22,12 @@ Combines Microsoft Security Exposure Management (ExposureGraph) topology with MD
 | `ExposureGraphEdges` | Exposure Management | Firewall/NSG rules: what ports are allowed from what CIDRs |
 | `DeviceNetworkEvents` | MDE | Actual inbound connections accepted, connection failures (probes), listening ports |
 | `DeviceNetworkInfo` | MDE | Network adapter config: public IPs, `IsConnectedToInternet` flag, network categories |
+
+### ⚠️ RemoteIPType FourToSixMapping Pitfall
+
+**CRITICAL:** Filtering `RemoteIPType == "Public"` misses connections to services using IPv4-mapped IPv6 sockets (e.g., IIS dual-stack listeners). When IIS accepts an IPv4 connection through its `::ffff:` binding, MDE classifies `RemoteIPType` as `FourToSixMapping` — even though the source IP is a public internet address. This means **queries filtering only on `"Public"` will report 0 inbound web connections** while `W3CIISLog` shows hundreds of requests from the same IPs on the same port.
+
+**Fix:** Use `RemoteIPType in ("Public", "FourToSixMapping")` for all inbound connection queries in this file. Alternatively, use RFC1918 exclusion filters (as in `queries/endpoint/endpoint_failed_connections.md` Query 2) which catch all non-private IPs regardless of MDE's type classification.
 
 ### Key ActionTypes in DeviceNetworkEvents
 

@@ -1,6 +1,8 @@
 ---
 name: identity-posture
 description: 'Use this skill when asked to audit, assess, or report on identity security posture across the organization. Triggers on keywords like "identity posture", "identity security report", "account hygiene", "stale accounts", "privileged accounts", "password posture", "identity providers", "multi-provider identity", "identity sprawl", "service accounts", "deleted accounts with roles", "identity risk", "account status", "cross-IdP", "honeytoken", "sensitive accounts", or when investigating identity lifecycle, privilege distribution, credential hygiene, or multi-provider account correlation. This skill queries the IdentityAccountInfo table in Advanced Hunting (with IdentityInfo and IdentityLogonEvents enrichment) to produce a comprehensive identity security posture assessment covering account inventory by provider, privileged account audit, stale/deleted account hygiene, password posture, risk distribution, multi-provider identity linking, MDI tag analysis, and department-level insights. Supports inline chat and markdown file output.'
+threat_pulse_domains: [identity]
+drill_down_prompt: 'Run identity posture report — account hygiene, privilege distribution, stale accounts'
 ---
 
 # Identity Security Posture — Instructions

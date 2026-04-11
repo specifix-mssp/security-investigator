@@ -5,6 +5,7 @@
 **Tables:** DeviceProcessEvents, DeviceNetworkEvents, DeviceFileEvents, DeviceEvents, DeviceRegistryEvents, SecurityAlert, EmailEvents, EmailAttachmentInfo  
 **Keywords:** infostealer, PXA Stealer, Eternidade, CrystalPDF, svchost masquerade, pythonw, DLL sideloading, process injection, certutil, AutoIt, credential theft, ClickFix, VBS dropper, WhatsApp abuse, scheduled task persistence, registry run key, obfuscated python, Telegram exfiltration, data staging, ZIP archive  
 **MITRE:** T1036.005, T1055, T1574.002, T1059.001, T1059.006, T1053.005, T1547.001, T1140, T1560.001, T1567, T1071.001, T1204.002, T1082, T1555, T1555.003, T1539, T1005, T1070.004, T1218  
+**Domains:** endpoint  
 **Timeframe:** Last 30 days (configurable)
 
 ---

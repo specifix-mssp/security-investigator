@@ -646,6 +646,22 @@ See `.github/skills/mcp-usage-monitoring/SKILL.md` Queries 25-27 for detection q
 
 - **Documentation**: https://learn.microsoft.com/en-us/azure/developer/azure-mcp-server/overview
 
+### Sentinel Exposure Graph MCP
+Attack surface analysis tools for the Microsoft Security Exposure Management graph. **More effective than raw KQL** for per-asset attack path scenarios — use these first, fall back to KQL for fleet-wide sweeps.
+
+- **`mcp_sentinel-grap_graph_find_blastradius`**: All downstream targets reachable from a source asset. Params: `sourceName`
+- **`mcp_sentinel-grap_graph_exposure_perimeter`**: Inbound perimeter — externally-reachable nodes with walkable paths TO a target. Params: `targetName`
+  - **Known limitation:** May return empty for assets that ARE network-reachable but lack formal ExposureGraph perimeter classification. Fall back to KQL edge analysis with `EdgeLabel == "routes traffic to"` when empty.
+- **`mcp_sentinel-grap_graph_find_walkable_paths`**: Full path between source and target with RBAC role detail, `isOverProvisioned` and `isIdentityInactive` flags. Params: `sourceName`, `targetName`
+- **`mcp_sentinel-grap_graph_find_connected_nodes`**: All nodes of a specific type within N hops. Params: `sourceName`, `sourceNodeLabel`, `targetNodeLabel`, `maxHops` (1–3 recommended; higher = very large results)
+- **`mcp_sentinel-grap_graph_get_context`**: Full graph schema (node/edge types). Params: `GraphName` (always `SystemScenarioEKGGraph`)
+
+**Workflow:** blast radius → exposure perimeter → walkable paths for specific targets → connected nodes by type → KQL for fleet-wide analysis
+
+- **When to Use**: Investigating compromised assets, mapping blast radius after incidents, validating attack paths, assessing critical asset exposure, identifying over-provisioned identities along permission chains
+- **When to Use KQL Instead**: Fleet-wide sweeps, cookie chain analysis across all devices, choke point detection, permission role distribution across all paths, custom multi-join aggregations
+- **Full documentation**: See `queries/cloud/exposure_graph_attack_paths.md` for detailed tool docs, parameters, examples, and 32 KQL queries
+
 ### 🔍 Resource Discovery — Cross-Subscription Lookup Pattern
 
 **`config.json` only contains the primary Sentinel workspace subscription.** Resources investigated via Defender XDR (DeviceInfo, ExposureGraphNodes, alerts) often reside in **different subscriptions**. When you need to look up an Azure resource (VM, NSG, NIC, etc.) discovered through investigation queries:
@@ -780,6 +796,7 @@ All query files in `queries/` MUST use this standardized metadata header for eff
 **Tables:** <comma-separated list of exact KQL table names>  
 **Keywords:** <comma-separated searchable terms — attack techniques, scenarios, field names>  
 **MITRE:** <comma-separated technique IDs, e.g., T1021.001, TA0008>  
+**Domains:** <comma-separated threat-pulse domain tags — see Discovery Manifest below>  
 **Timeframe:** Last N days (configurable)  
 ```
 
@@ -790,10 +807,38 @@ All query files in `queries/` MUST use this standardized metadata header for eff
 | `Tables:` | Exact KQL table names for `grep_search` by table | `AuditLogs, SecurityAlert, SecurityIncident` |
 | `Keywords:` | Searchable terms covering attack scenarios, operations, field names | `credential, secret, certificate, persistence, app registration` |
 | `MITRE:` | ATT&CK technique and tactic IDs | `T1098.001, T1136.003, TA0003` |
+| `Domains:` | Threat-pulse domain tags for manifest-based cross-referencing | `identity, email` |
+
+Valid domain tags: `incidents`, `identity`, `spn`, `endpoint`, `email`, `admin`, `cloud`, `exposure`
 
 **Search pattern:** `grep_search` scoped to `queries/**` with the table name or keyword will hit the metadata header and locate the right file instantly.
 
 **When creating new query files:** Follow this format. When updating existing files that lack these fields, add them.
+
+#### Discovery Manifest (`.github/manifests/`)
+
+The discovery manifest indexes all query files and skills with their domain tags, enabling **deterministic cross-referencing** by threat-pulse and other skills.
+
+Two variants are generated:
+- **`discovery-manifest.yaml`** (default) — title, path, domains, mitre, prompt only. ~500 lines. **Threat-pulse loads this one** to minimize context consumption.
+- **`discovery-manifest-full.yaml`** (verbose, `--full` flag) — all fields (tables, keywords, mitre, domains, platform, timeframe). ~1300 lines.
+
+**How it works:**
+- Query files declare `**Domains:**` in their metadata header
+- Skills declare `threat_pulse_domains:` and `drill_down_prompt:` in their YAML frontmatter
+- `python .github/manifests/build_manifest.py` scans everything and emits both manifests to `.github/manifests/`
+- The validator flags missing fields — missing `Domains:` on a query file is an error
+
+**When to regenerate:** Run `python .github/manifests/build_manifest.py` after:
+- Creating or renaming a query file or skill
+- Changing `Domains:`, `threat_pulse_domains:`, or `drill_down_prompt:` values
+- Adding new domain tags (update `VALID_DOMAINS` in `build_manifest.py` first)
+
+| Action | Status |
+|--------|--------|
+| Creating a query file without `**Domains:**` | ❌ **PROHIBITED** |
+| Creating an investigation skill without `threat_pulse_domains:` | ❌ **PROHIBITED** |
+| Forgetting to run `build_manifest.py` after adding files | ❌ **PROHIBITED** |
 
 **🔴 REQUIRED: cd-metadata blocks for ALL queries in `queries/`**
 

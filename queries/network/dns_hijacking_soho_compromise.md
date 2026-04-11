@@ -5,6 +5,7 @@
 **Tables:** DeviceNetworkInfo, DeviceNetworkEvents, DeviceRegistryEvents, DeviceProcessEvents, EntraIdSignInEvents, CloudAppEvents  
 **Keywords:** DNS hijacking, SOHO router, DNS settings modification, DHCP poisoning, adversary-in-the-middle, AiTM, Forest Blizzard, Storm-2754, dnsmasq, DNS resolver, DnsAddresses, DHCP DNS  
 **MITRE:** T1584.002, T1557, T1040, TA0042, TA0006, TA0009  
+**Domains:** endpoint, identity  
 **Timeframe:** Last 7-30 days (configurable)
 
 ---

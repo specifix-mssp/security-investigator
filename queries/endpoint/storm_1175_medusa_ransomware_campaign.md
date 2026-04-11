@@ -5,6 +5,7 @@
 **Tables:** DeviceProcessEvents, DeviceFileEvents, DeviceNetworkEvents, DeviceRegistryEvents, DeviceTvmSoftwareVulnerabilities, AlertInfo, AlertEvidence  
 **Keywords:** Storm-1175, Medusa ransomware, Gaze.exe, SimpleHelp, AnyDesk, Rclone, Bandizip, PDQ Deploy, PsExec, Impacket, wmiexec, smbexec, Cloudflare tunnel, LSASS, WDigest, NTDS.dit, SAM, web shell, RMM tools, credential theft, lateral movement, defense evasion, data exfiltration, nanodump, pypykatz, Veeam  
 **MITRE:** T1190, T1059.001, T1136.001, T1098, T1021.001, T1021.002, T1219, T1003.001, T1003.002, T1003.003, T1112, T1562.001, T1486, T1567, T1572, T1048, T1569.002, T1072, T1036.005  
+**Domains:** endpoint, exposure  
 **Timeframe:** Last 30 days (configurable)  
 **Source:** [Microsoft Security Blog — Storm-1175 focuses gaze on vulnerable web-facing assets in high-tempo Medusa ransomware operations](https://www.microsoft.com/en-us/security/blog/2026/04/06/storm-1175-focuses-gaze-on-vulnerable-web-facing-assets-in-high-tempo-medusa-ransomware-operations/)
 

@@ -1,6 +1,8 @@
 ---
 name: ioc-investigation
 description: Use this skill when asked to investigate an Indicator of Compromise (IoC) such as an IP address, DNS domain, URL, or file hash. Triggers on keywords like "investigate IP", "check domain", "IoC investigation", "threat intel", "is this malicious", "suspicious URL", or when an IP/domain/URL/hash is mentioned with investigation context. This skill provides comprehensive IoC analysis using Microsoft Defender Threat Intelligence, Sentinel Threat Intel tables, Advanced Hunting, organizational exposure assessment, CVE correlation, and affected device enumeration.
+threat_pulse_domains: [identity, endpoint, email, exposure]
+drill_down_prompt: 'Investigate IoC {entity} — threat intel, organizational exposure, affected devices'
 ---
 
 # IoC (Indicator of Compromise) Investigation - Instructions

@@ -1,6 +1,8 @@
 ---
 name: scope-drift-detection-device
 description: 'Use this skill when asked to detect scope drift, behavioral expansion, or process baseline deviation on devices or endpoints. Triggers on keywords like "device drift", "device process drift", "endpoint drift", "process baseline", "device behavioral change", or when investigating whether a device has gradually expanded its process execution beyond an established baseline. This skill builds a configurable-window behavioral baseline using DeviceProcessEvents, compares baseline with recent activity, computes a weighted Drift Score across 5 dimensions (Volume, Processes, Accounts, Process Chains, Signing Companies), and correlates with SecurityAlert, DeviceInfo (for uptime corroboration via MDE sensor health), and command-line pattern analysis. Supports fleet-wide and single-device modes.'
+threat_pulse_domains: [endpoint]
+drill_down_prompt: 'Analyze device process drift for {entity} — behavioral baseline vs recent activity'
 ---
 
 # Device Scope Drift Detection — Instructions
