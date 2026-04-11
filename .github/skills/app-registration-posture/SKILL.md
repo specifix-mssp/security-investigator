@@ -204,6 +204,63 @@ uses app permissions for lateral movement / data exfiltration / privilege escala
 
 ---
 
+## 🔴 Delegated vs Application Permissions — Risk Model
+
+**This skill focuses on application permissions (`appRoleAssignments`) because they represent unattended, user-independent privilege. Delegated permissions (`oauth2PermissionGrants`) are a fundamentally different risk category.** Do not conflate the two.
+
+### Why This Distinction Matters
+
+| Factor | Application Permissions (`appRoleAssignments`) | Delegated Permissions (`oauth2PermissionGrants`) |
+|--------|------------------------------------------------|--------------------------------------------------|
+| **Identity** | App acts as **its own identity** — no user context required | App acts **on behalf of a signed-in user** |
+| **Effective permissions** | The full granted scope — the app CAN do everything the permission allows | **Intersection** of app's delegated scope AND the user's own Entra roles — the app can only do what the user could already do |
+| **Unattended access** | ✅ Yes — runs 24/7 via client credentials or managed identity | ❌ No — requires a user session (interactive or refresh token) |
+| **Blast radius** | The permission itself IS the blast radius — `Directory.ReadWrite.All` means full directory write for the app, regardless of who triggered it | Bounded by the user's roles — a standard user with `Directory.ReadWrite.All` delegated consent still can't write to the directory because they lack the Entra role |
+| **Token theft impact** | Stolen app credential = full permission scope, no MFA challenge | Stolen user token = only the user's own effective permissions, bounded by their roles |
+| **Risk priority** | 🔴 **Primary concern** — this skill's focus | 🟡 **Secondary concern** — relevant only for privileged admin accounts |
+
+### What AllPrincipals Delegated Consent Actually Does
+
+An `AllPrincipals` (admin consent) delegated grant **removes the per-user consent prompt** — it does NOT grant users abilities beyond their existing Entra roles. The practical impact:
+
+- **Standard users:** Effectively no additional risk. The app can request tokens with broad scopes, but the effective permissions are still limited by the user's role assignments. A user without Exchange Admin role cannot manage mailboxes even if `Mail.ReadWrite` is consented.
+- **Privileged admins:** Marginal incremental risk. The consent prompt is removed as a speed bump, so a stolen admin session can silently acquire tokens with the consented scopes — but the admin could have granted that consent themselves in one click anyway.
+- **Token theft for admins:** The real scenario where delegated consent matters. An attacker with a stolen Global Admin refresh token can silently use any AllPrincipals-consented scope without triggering a consent dialog. However, the admin already had the ability to do everything those scopes enable.
+
+### How This Affects Skill Analysis
+
+1. **Phase 1 (P2)** queries `appRoleAssignedTo` — these are **application permissions**. This is correct and intentional. The Dangerous Permissions Reference table above applies to application-level grants only.
+
+2. **Chain detection queries (Q1, Q3, Q6)** detect `"Consent to application"` and `"Add delegated permission grant"` in AuditLogs — these detect the **act of granting consent**, which is a valid abuse signal regardless of permission type (a compromised user granting broad consent is suspicious). The risk assessment should focus on what the user then DOES with the consented access, not on the scope list itself.
+
+3. **When assessing consent grants in chain detection output:**
+   - A compromised user adding **application permissions** (`Add app role assignment to service principal`) = 🔴 Critical — the app gains independent, unattended access
+   - A compromised user granting **delegated consent** (`Consent to application`, `Add delegated permission grant`) = 🟠 High if the user is a privileged admin, 🟡 Medium for standard users — the effective permissions are bounded by the user's roles
+
+4. **Do NOT overstate delegated AllPrincipals consent risk.** Reporting 100+ delegated scopes as "dangerous" without explaining the intersection model misleads stakeholders into believing any user can exploit those scopes. Always qualify: "Effective delegated permissions are limited to what each user's Entra roles already allow."
+
+### When Delegated Permissions ARE Concerning
+
+Despite the lower baseline risk, flag delegated consents when:
+
+| Scenario | Why It Matters |
+|----------|----------------|
+| AllPrincipals consent on a **3rd-party (non-Microsoft) app** with broad scopes | The app vendor could be compromised, and the consent enables data access for any admin session |
+| Delegated consent combined with Q1 chain (risky admin → consent grant) | A compromised admin granting broad delegated consent may be preparing for token-based lateral movement |
+| App has BOTH application permissions AND broad delegated consent | Dual permission model = dual attack surface |
+| AllPrincipals consent for `offline_access` + sensitive scopes on a public client app | Enables refresh token persistence without re-authentication |
+
+### ⛔ PROHIBITED Actions
+
+| Action | Status |
+|--------|--------|
+| Stating that AllPrincipals delegated consent gives "any user" access to the scoped resources | ❌ **PROHIBITED** — effective permissions = intersection with user's roles |
+| Rating delegated consent scopes at the same severity as identical application permission scopes | ❌ **PROHIBITED** — application permissions are unattended and user-independent |
+| Omitting the delegated-vs-application distinction when presenting permission findings | ❌ **PROHIBITED** — always clarify which permission type is being discussed |
+| Ignoring delegated consent entirely | ❌ **PROHIBITED** — it is a secondary risk that matters for privileged accounts |
+
+---
+
 ## App Permission Risk Score Formula
 
 The App Permission Risk Score is a composite risk indicator summarizing the security posture of your organization's app registration and service principal fleet. Higher scores indicate greater risk.
@@ -1413,6 +1470,14 @@ The file report uses the same inline template structure with these additions:
 
 **Solution:** If Q1 results are dominated by `suspiciousAuthAppApproval` risk types, note in the report that these may be self-referencing. The user can filter with `| where RiskTypes !has "suspiciousAuthAppApproval"` for higher-confidence chains.
 
+### 9. Conflating Delegated AllPrincipals Consent with Application Permission Risk
+
+**Problem:** When auditing tenant permissions (e.g., `Get-MgOauth2PermissionGrant -Filter "consentType eq 'AllPrincipals'"`), the returned delegated scopes can look alarming — 100+ scopes on a single app. It is tempting to rate these at the same severity as application permissions.
+
+**Why this is wrong:** Delegated permissions operate as the **intersection** of the app's consented scopes and the signed-in user's Entra roles. A standard user cannot exploit broad delegated consent beyond their own role boundaries. The consent only removes the per-user prompt — it does not elevate privilege.
+
+**Solution:** See [Delegated vs Application Permissions — Risk Model](#-delegated-vs-application-permissions--risk-model). When this skill's analysis overlaps with a separate delegated consent audit, always clarify which permission type is being discussed. Application permissions (from P2/`appRoleAssignedTo`) are the primary risk. Delegated AllPrincipals consents are a secondary concern relevant mainly to privileged admin account compromise scenarios.
+
 ---
 
 ## Quality Checklist
@@ -1430,6 +1495,7 @@ Before delivering the report, verify:
 - [ ] Owner risk assessment includes directory role check + Identity Protection status
 - [ ] Credential hygiene includes expiry dates, not just counts
 - [ ] Chain detection results include triage priority (🔴/🟠/🟡) for each finding
+- [ ] Chain detection consent findings distinguish application permission grants (🔴) from delegated consent grants (🟠/🟡) — see [Delegated vs Application Permissions — Risk Model](#-delegated-vs-application-permissions--risk-model)
 - [ ] Q8 cross-reference includes three-way breakdown (both flagged, skill-only, Microsoft-only)
 - [ ] Recommendations complement (not duplicate) App Governance capabilities
 - [ ] All hyperlinks copied verbatim from URL Registry — no fabricated URLs
