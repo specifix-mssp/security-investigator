@@ -724,15 +724,16 @@ let end = datetime(<EndDate>);
 CloudAppEvents
 | where TimeGenerated between (start .. end)
 | where ActionType in ("FileCopiedToRemovableMedia", "FileUploadedToCloud", "FileCopiedToNetworkShare")
-| extend DlpAudit = parse_json(RawEventData)["DlpAuditEventMetadata"]
-| extend File = parse_json(RawEventData)["ObjectId"]
-| extend UserId = parse_json(RawEventData)["UserId"]
-| extend DeviceName = parse_json(RawEventData)["DeviceName"]
-| extend ClientIP = parse_json(RawEventData)["ClientIP"]
-| extend RuleName = parse_json(RawEventData)["PolicyMatchInfo"]["RuleName"]
-| extend Operation = parse_json(RawEventData)["Operation"]
-| extend TargetDomain = parse_json(RawEventData)["TargetDomain"]
-| extend TargetFilePath = parse_json(RawEventData)["TargetFilePath"]
+| extend ParsedData = parse_json(RawEventData)
+| extend DlpAudit = ParsedData["DlpAuditEventMetadata"]
+| extend File = ParsedData["ObjectId"]
+| extend UserId = ParsedData["UserId"]
+| extend DeviceName = ParsedData["DeviceName"]
+| extend ClientIP = ParsedData["ClientIP"]
+| extend RuleName = ParsedData["PolicyMatchInfo"]["RuleName"]
+| extend Operation = ParsedData["Operation"]
+| extend TargetDomain = ParsedData["TargetDomain"]
+| extend TargetFilePath = ParsedData["TargetFilePath"]
 | where isnotnull(DlpAudit)
 | where UserId == upn
 | summarize by TimeGenerated, tostring(UserId), tostring(DeviceName), tostring(ClientIP), tostring(RuleName), tostring(File), tostring(Operation), tostring(TargetDomain), tostring(TargetFilePath)
