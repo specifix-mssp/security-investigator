@@ -613,7 +613,7 @@ SecurityIncident
 | `SecurityIncident.Status` | Incident table | **Real status** - New/Active/Closed |
 | `SecurityIncident.Classification` | Incident table | **Closure reason** - TruePositive/FalsePositive/BenignPositive |
 
-**Reference:** See `.github/skills/geomap-visualization/SKILL.md` Query 6 and `.github/skills/user-investigation/SKILL.md` for the canonical join pattern.
+**Reference:** See `queries/incidents/security_incident_analysis.md` for the canonical SecurityAlert→SecurityIncident join pattern.
 
 ---
 
