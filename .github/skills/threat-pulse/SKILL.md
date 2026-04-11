@@ -512,7 +512,7 @@ union EntraSpray, EndpointBrute
 
 ### Query 5: SPN Behavioral Drift (90d Baseline vs 7d Recent)
 
-🤖 **Automation monitoring** — Composite drift score across 5 dimensions for service principals.
+🤖 **Automation monitoring** — Composite drift score across 5 dimensions for service principals, with IPv6 subnet normalization and IPDrift cap.
 
 **Tool:** `mcp_sentinel-data_query_lake` (needs >30d lookback)
 
@@ -521,19 +521,25 @@ let BL_Start = ago(97d); let BL_End = ago(7d);
 let RC_Start = ago(7d); let RC_End = now();
 let BL = AADServicePrincipalSignInLogs
 | where TimeGenerated between (BL_Start .. BL_End)
+| extend NormalizedIP = case(
+    IPAddress has ":", strcat_array(array_slice(split(IPAddress, ":"), 0, 3), ":"),
+    IPAddress)
 | summarize 
     BL_Vol = count(),
     BL_Res = dcount(ResourceDisplayName),
-    BL_IPs = dcount(IPAddress),
+    BL_IPs = dcount(NormalizedIP),
     BL_Loc = dcount(Location),
     BL_Fail = dcountif(ResultType, ResultType != "0" and ResultType != 0)
     by ServicePrincipalId, ServicePrincipalName;
 let RC = AADServicePrincipalSignInLogs
 | where TimeGenerated between (RC_Start .. RC_End)
+| extend NormalizedIP = case(
+    IPAddress has ":", strcat_array(array_slice(split(IPAddress, ":"), 0, 3), ":"),
+    IPAddress)
 | summarize 
     RC_Vol = count(),
     RC_Res = dcount(ResourceDisplayName),
-    RC_IPs = dcount(IPAddress),
+    RC_IPs = dcount(NormalizedIP),
     RC_Loc = dcount(Location),
     RC_Fail = dcountif(ResultType, ResultType != "0" and ResultType != 0)
     by ServicePrincipalId, ServicePrincipalName;
@@ -541,7 +547,8 @@ RC | join kind=inner BL on ServicePrincipalId
 | extend 
     VolDrift = round(RC_Vol * 100.0 / max_of(BL_Vol, 10), 0),
     ResDrift = round(RC_Res * 100.0 / max_of(BL_Res, 3), 0),
-    IPDrift = round(RC_IPs * 100.0 / max_of(BL_IPs, 3), 0),
+    IPDriftRaw = round(RC_IPs * 100.0 / max_of(BL_IPs, 3), 0),
+    IPDrift = min_of(round(RC_IPs * 100.0 / max_of(BL_IPs, 3), 0), 300),
     LocDrift = round(RC_Loc * 100.0 / max_of(BL_Loc, 2), 0),
     FailDrift = round(RC_Fail * 100.0 / max_of(BL_Fail, 5), 0)
 | extend DriftScore = round((VolDrift*0.20 + ResDrift*0.25 + IPDrift*0.25 + LocDrift*0.15 + FailDrift*0.15), 0)
@@ -550,12 +557,17 @@ RC | join kind=inner BL on ServicePrincipalId
 | take 10
 ```
 
-**Purpose:** Identifies service principals with significant behavioral changes from their 90-day baseline. The weighted drift score combines Volume (20%), Resources (25%), IPs (25%), Locations (15%), and Failure Rate (15%). Scores above 150 are flagged, above 250 are critical.
+**Purpose:** Identifies service principals with significant behavioral changes from their 90-day baseline.
+
+**Tuning notes:**
+- **IPv6 /64 normalization:** IPv6 addresses are collapsed to their /64 prefix before counting. Azure PaaS services (Copilot Studio, Playbook Automation) rotate through dozens of `fd00:` ULA pod addresses within the same cluster — without normalization, each pod IP inflates IPDrift by hundreds of percent.
+- **IPDrift cap (300%):** `IPDriftRaw` shows the true ratio; `IPDrift` is capped to prevent IP-only spikes from dominating. Transparent when IPv4-only SPNs have genuine expansion.
+- **Weights:** Volume 20%, Resources 25%, IPs 25%, Locations 15%, Failure Rate 15%.
 
 **Verdict logic:**
-- 🔴 Escalate: Any SPN with `DriftScore > 250` or `IPDrift > 400%`
+- 🔴 Escalate: Any SPN with `DriftScore > 250` or `IPDriftRaw > 400%`
 - 🟠 Investigate: `DriftScore > 150`
-- 🟡 Monitor: `DriftScore 120–150` (minor expansion)
+- 🟡 Monitor: `DriftScore 120–150`
 - ✅ Clear: No SPNs above threshold
 
 **Drill-down:** Use `scope-drift-detection/spn` skill for full investigation of flagged SPNs.
@@ -564,13 +576,17 @@ RC | join kind=inner BL on ServicePrincipalId
 
 ### Query 6: Fleet-Wide Device Process Drift
 
-💻 **Endpoint behavioral baseline** — Per-device drift scores computed in-query (7d baseline vs 1d recent), returned pre-ranked.
+💻 **Endpoint behavioral baseline** — Per-device drift scores computed in-query (7d baseline vs 1d recent), with infrastructure noise filtering and VolDrift cap to prevent automation-driven false positives.
 
 **Tool:** `RunAdvancedHuntingQuery`
 
 ```kql
 DeviceProcessEvents
 | where Timestamp > ago(7d)
+| where not(
+    InitiatingProcessFileName in ("gc_worker", "gc_linux_service", "dsc_host")
+    or (InitiatingProcessFileName == "dash" and InitiatingProcessParentFileName in ("gc_worker", "gc_linux_service"))
+  )
 | extend IsRecent = Timestamp >= ago(1d)
 | summarize
     BL_Events = countif(not(IsRecent)),
@@ -586,30 +602,35 @@ DeviceProcessEvents
     by DeviceName
 | where RC_Events > 0 and BL_Events > 0
 | extend
-    VolDrift = round(RC_Events * 600.0 / max_of(BL_Events, 1), 0),
+    VolDriftRaw = round(RC_Events * 600.0 / max_of(BL_Events, 1), 0),
+    VolDrift = min_of(round(RC_Events * 600.0 / max_of(BL_Events, 1), 0), 300),
     ProcDrift = round(RC_Procs * 100.0 / max_of(BL_Procs, 1), 0),
     AcctDrift = round(RC_Accts * 100.0 / max_of(BL_Accts, 1), 0),
     ChainDrift = round(RC_Chains * 100.0 / max_of(BL_Chains, 1), 0),
     CompDrift = round(RC_Comps * 100.0 / max_of(BL_Comps, 1), 0)
-| extend DriftScore = round(VolDrift * 0.30 + ProcDrift * 0.25 + AcctDrift * 0.15 + ChainDrift * 0.20 + CompDrift * 0.10, 0)
+| extend DriftScore = round(VolDrift * 0.30 + ProcDrift * 0.25 + ChainDrift * 0.20 + AcctDrift * 0.15 + CompDrift * 0.10, 0)
 | order by DriftScore desc
 | take 10
-| project DeviceName, DriftScore, VolDrift, ProcDrift, AcctDrift, ChainDrift, CompDrift
+| project DeviceName, DriftScore, VolDriftRaw, VolDrift, ProcDrift, AcctDrift, ChainDrift, CompDrift
 ```
 
 **Purpose:** Returns the top 10 devices ranked by composite drift score, pre-computed in KQL. No LLM-side math required — just interpret the returned scores.
 
-**Drift formula notes:**
-- **Volume (`VolDrift`):** `RC_Events * 600 / BL_Events` — multiplies recent by 600 (= 100 × 6 baseline days) to normalize to a per-day rate before computing the percentage. This is the only metric that needs time normalization because event counts scale linearly with time.
-- **Dcount metrics (`ProcDrift`, `AcctDrift`, `ChainDrift`, `CompDrift`):** `RC_Dim * 100 / BL_Dim` — compared directly WITHOUT dividing baseline by 6. Distinct counts do NOT scale linearly with time (seeing 4 unique accounts over 6 days ≠ 0.67 accounts/day). The 6-day baseline captures the "universe" of distinct values; a single day shows what fraction was active. 100% = normal, >100% = new values appeared.
+**Tuning notes:**
+- **GC filter:** Excludes Azure Guest Configuration (`gc_worker`, `gc_linux_service`, `dsc_host`) and their child shell chains. Transparent on Windows (<1% impact).
+- **VolDrift cap (300%):** `VolDriftRaw` shows the true ratio; `VolDrift` is capped via `min_of()` so volume-only spikes don't dominate. When `VolDriftRaw` ≫ 300 but diversity metrics are ~100, it's infrastructure noise. When both are elevated, high-confidence anomaly.
+- **Volume (`VolDrift`):** `RC * 600 / BL` normalizes to per-day rate (100 × 6 baseline days), then caps at 300%.
+- **Dcount metrics:** `RC_Dim * 100 / BL_Dim` — compared directly (distinct counts don't scale linearly with time). 100% = normal, >100% = new values appeared.
 - **Weights:** Volume 30%, Processes 25%, Chains 20%, Accounts 15%, Companies 10%.
 
 **Verdict logic:**
-- 🔴 Escalate: Any device with `DriftScore > 250` (major anomaly)
-- 🟠 Investigate: Any device with `DriftScore 150–250` (significant deviation)
-- 🟡 Monitor: Any device with `DriftScore 120–150` (minor behavioral expansion)
-- ✅ Clear: All devices within 80–120 (stable), or fleet is uniform (all scores within 20 points of each other — downgrade one level per fleet-uniformity rule)
+- 🔴 Escalate: Any device with `DriftScore > 200` (major anomaly — <1% of fleet weekly across 90-day validation)
+- 🟠 Investigate: Any device with `DriftScore 150–200` (significant deviation — 0-5% of fleet weekly)
+- 🟡 Monitor: Any device with `DriftScore 120–150` (minor behavioral expansion — 2-17% of fleet weekly)
+- ✅ Clear: All devices within 80–120 (stable fleet median range)
 - 🔵 Informational: Any device with `DriftScore < 80` (contracting activity — may be idle/decommissioned)
+
+**Fleet-uniformity rule:** If ALL top-10 devices cluster within 20 points of each other, the fleet is behaving uniformly and the verdict should be downgraded one level. Drift is most meaningful when individual devices diverge from the fleet cluster.
 
 ---
 
@@ -828,14 +849,19 @@ Q6 returns pre-computed drift scores directly from KQL — **no LLM-side math is
 | DriftScore | Interpretation | Verdict |
 |------------|---------------|--------|
 | < 80 | Contracting activity (device may be idle/decommissioned) | 🔵 Informational |
-| 80–120 | Stable (normal operating range) | ✅ Clear |
-| 120–150 | Minor behavioral expansion | 🟡 Monitor |
-| 150–250 | Significant deviation | 🟠 Investigate |
-| 250+ | Major anomaly — immediate investigation | 🔴 Escalate |
+| 80–120 | Stable (fleet median range — validated across 90d in 2 environments) | ✅ Clear |
+| 120–150 | Minor behavioral expansion (2-17% of fleet weekly) | 🟡 Monitor |
+| 150–200 | Significant deviation (0-5% of fleet weekly) | 🟠 Investigate |
+| 200+ | Major anomaly (<1% of fleet weekly across 90d validation) | 🔴 Escalate |
 
-**Fleet-wide context:** If ALL devices show similar scores (e.g., all between 80–120 or all between 120–150), the fleet is behaving uniformly and the verdict should be downgraded one level. Drift is most meaningful when individual devices diverge from the fleet average.
+**VolDrift cap context:** `VolDriftRaw` is projected alongside the capped `VolDrift`. When interpreting results:
+- If `VolDriftRaw` ≫ 300 but ProcDrift/ChainDrift/AcctDrift are near 100: **infrastructure volume spike** (GC, patching, agent restart) — low concern despite high raw volume.
+- If `VolDriftRaw` > 300 AND ProcDrift/ChainDrift/AcctDrift are also elevated: **genuine multi-dimensional anomaly** — high confidence finding.
+- If `VolDriftRaw` ≤ 300: cap was not triggered — score reflects true proportions.
 
-**⛔ DO NOT manually recompute drift scores.** The KQL query handles Volume normalization (÷6 baseline days) and dcount comparison (direct ratio). Trust the returned `DriftScore` column.
+**Fleet-uniformity rule:** If ALL top-10 devices cluster within 20 points of each other, the fleet is behaving uniformly and the verdict should be downgraded one level. Drift is most meaningful when individual devices diverge from the fleet cluster.
+
+**⛔ DO NOT manually recompute drift scores.** The KQL query handles Volume normalization (÷6 baseline days), VolDrift capping (at 300%), GC infrastructure filtering, and dcount comparison (direct ratio). Trust the returned `DriftScore` column.
 
 ### Cross-Query Correlation
 
