@@ -605,7 +605,7 @@ SecurityIncident
 | order by CreatedTime desc
 ```
 
-> **Output rule:** When presenting these results to the user, always render `PortalUrl` as a clickable markdown link: `[XDR #{ProviderIncidentId}]({PortalUrl})`. See [SecurityIncident Query & Output Standards](#-securityincident-query--output-standards--global-rule).
+> **Output rule:** When presenting these results to the user, always render `PortalUrl` as a clickable markdown link: `[#{ProviderIncidentId}]({PortalUrl})`. See [SecurityIncident Query & Output Standards](#-securityincident-query--output-standards--global-rule).
 
 | Field | Source | Meaning |
 |-------|--------|----------|

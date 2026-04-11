@@ -840,7 +840,7 @@ let CriticalAssets = ExposureGraphNodes
         ExposureScore = tostring(NodeProperties.rawData.exposureScore);
 CriticalAssets
 | join kind=leftouter InternetFacing on DeviceName
-| extend IsVerifiedExposed = isnotempty(PublicIP)
+| extend IsVerifiedExposed = isnotempty(PublicIP) or isnotempty(Reason)
 | project DeviceName, CriticalityLevel, IsVerifiedExposed,
     Reason, PublicIP, ExposedPort, ExposureScore
 | order by IsVerifiedExposed desc, CriticalityLevel asc
@@ -848,6 +848,8 @@ CriticalAssets
 ```
 
 **Purpose:** Returns the critical asset inventory (criticality 0–3) enriched with MDE's authoritative internet-facing classification. `DeviceInfo.IsInternetFacing` is confirmed via Microsoft external scans or observed inbound connections and auto-expires after 48h — far more reliable than ExposureGraph properties like `isCustomerFacing` (business flag) or `rawData.IsInternetFacing` (not populated in many environments). See [MS Docs](https://learn.microsoft.com/en-us/defender-endpoint/internet-facing-devices#use-advanced-hunting) and `queries/network/internet_exposure_analysis.md` Query 1 for the canonical reference.
+
+**`IsVerifiedExposed` logic:** Checks BOTH `PublicIP` (populated for `PublicScan` — Microsoft external scanner) AND `Reason` (populated for `ExternalNetworkConnection` — observed inbound traffic). The original `isnotempty(PublicIP)` missed `ExternalNetworkConnection` exposures where MDE confirms inbound connections but doesn't populate the scanned public IP field.
 
 **Verdict logic:**
 - 🔴 Escalate: Any `IsVerifiedExposed == true` with `CriticalityLevel == 0` (internet-facing domain controller/CA)
@@ -1009,7 +1011,7 @@ Insert `📂 Recommended Query Files` section after **Recommended Actions** in t
 
 1. **Header:** `# 🔍 Threat Pulse — <Workspace> | <Date>` with workspace ID, scan duration, query count
 2. **Dashboard Summary:** 10-row table — one row per query (Q1, Q1b, Q2, Q4–Q12), columns: `#`, `Domain`, `Status` (verdict emoji), `Key Finding` (1-line). Verdicts: 🔴 Escalate | 🟠 Investigate | 🟡 Monitor | ✅ Clear | ❓ No Data
-3. **Detailed Findings:** One section per query — EVERY query gets a section (no skipping). Data tables (max 10 rows inline, unlimited in file). Q1 incidents must include `[XDR #<id>](https://security.microsoft.com/incidents/<ProviderIncidentId>)` links. Q1b closed summary always renders after Q1.
+3. **Detailed Findings:** One section per query — EVERY query gets a section (no skipping). Data tables (max 10 rows inline, unlimited in file). Q1 incidents must include `[#<id>](https://security.microsoft.com/incidents/<ProviderIncidentId>)` links. Q1b closed summary always renders after Q1.
 4. **Cross-Query Correlations:** Table of correlated findings per Post-Processing rules, or `✅ No correlations detected`.
 5. **🎯 Recommended Actions:** Prioritized table with action, trigger query, and drill-down skill.
 6. **📂 Recommended Query Files:** Per the Report Output Block procedure above. For 🟡-only verdicts, use "📂 Proactive Hunting Suggestions" header instead. Omit entirely when all ✅.
