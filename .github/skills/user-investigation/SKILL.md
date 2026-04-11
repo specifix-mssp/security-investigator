@@ -636,6 +636,11 @@ most_recent_signins
 ```
 
 ### 4. Entra ID Audit Log Activity (Aggregated Summary)
+
+**Tool:** `RunAdvancedHuntingQuery` (≤30d) | `mcp_sentinel-data_query_lake` (>30d fallback)
+
+**AH parsing note:** `InitiatedBy` is dynamic in AH — use `tostring(InitiatedBy.user.userPrincipalName)` for direct field access. For `TargetResources`, use `tostring(TargetResources[0].displayName)`. Do NOT double-wrap with `parse_json(tostring(parse_json(tostring(...))))` — that Data Lake pattern can cause errors in AH.
+
 ```kql
 AuditLogs
 | where TimeGenerated between (datetime(<StartDate>) .. datetime(<EndDate>))
@@ -648,6 +653,18 @@ AuditLogs
     by Category, Result
 | order by Count desc
 | take 10
+```
+
+**Ad-hoc drill-down pattern (AH-safe):** When you need detailed audit entries beyond the summary above:
+```kql
+AuditLogs
+| where TimeGenerated between (datetime(<StartDate>) .. datetime(<EndDate>))
+| where Identity =~ '<UPN>' or tostring(InitiatedBy) has '<UPN>'
+| extend Actor = tostring(InitiatedBy.user.userPrincipalName)
+| extend Target = tostring(TargetResources[0].displayName)
+| project TimeGenerated, OperationName, Actor, Target, Result, Category
+| order by TimeGenerated desc
+| take 30
 ```
 
 ### 5. Office 365 (Email / Teams / SharePoint) Activity Distribution
