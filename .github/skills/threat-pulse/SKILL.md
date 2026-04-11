@@ -168,7 +168,7 @@ Estimated time: ~2–4 minutes
 | Type | Icon | Source | Example |
 |------|------|--------|---------|
 | **Skill investigation** | 🔍 | Per-query `Drill-down:` skill + entities from findings | `🔍 Investigate user jsmith@contoso.com` → `user-investigation` |
-| **Query file hunt** | 📄 | Keyword extraction → `grep_search` → `queries/**` | `📄 Hunt for RDP lateral movement from 10.0.0.50` → `queries/endpoint/rdp_lateral_movement.md` |
+| **Query file hunt** | 📄 | Manifest domain + MITRE matching → query file | `📄 Hunt for RDP lateral movement from 10.0.0.50` → `queries/endpoint/rdp_lateral_movement.md` |
 | **IOC lookup** | 🎯 | Suspicious IPs, domains, hashes surfaced in findings | `🎯 Enrich and investigate IP 203.0.113.42` → `ioc-investigation` |
 
 **Skill matching rules — derive from findings:**
@@ -891,7 +891,7 @@ Each threat-pulse query group maps to a domain tag. Non-✅ domains drive manife
 4. **Rank results (three-tier):**
    - **Primary:** Number of matching domain tags (multi-domain match ranks higher)
    - **Secondary:** MITRE technique overlap — compare technique IDs from Q1/Q1b `Techniques` arrays (e.g., `T1566`, `T1078`) directly against the manifest entry's `mitre` field. Exact string match — no tactic-to-technique translation needed
-   - **Tertiary:** Keyword overlap — match entity names, process names, CVE IDs, or ActionTypes from findings against the manifest entry's `keywords` field (slim manifest doesn't include keywords — use domain + mitre matching as primary/secondary; keyword matching is optional via `grep_search` on the query file if needed)
+   - **Tertiary:** Keyword overlap — match entity names, process names, CVE IDs, or ActionTypes from findings against manifest entry titles and paths
 5. **Select top N:** 🔴/🟠 verdicts: 3–5 files. 🟡-only: 1–2 files
 6. **Format links:** Use the `title` and `path` from the manifest entry to build clickable links (see [Link Format Rules](#-mandatory-clickable-file-links) below)
 

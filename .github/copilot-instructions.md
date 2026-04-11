@@ -649,6 +649,8 @@ See `.github/skills/mcp-usage-monitoring/SKILL.md` Queries 25-27 for detection q
 ### Sentinel Exposure Graph MCP
 Attack surface analysis tools for the Microsoft Security Exposure Management graph. **More effective than raw KQL** for per-asset attack path scenarios — use these first, fall back to KQL for fleet-wide sweeps.
 
+> **⚠️ Preview:** The Sentinel Exposure Graph MCP server is in preview and may not be available in all environments. If the tools are not present (tool calls fail or are not listed), fall back to KQL queries against `ExposureGraphNodes` / `ExposureGraphEdges` in Advanced Hunting. See `queries/cloud/exposure_graph_attack_paths.md` for equivalent KQL patterns.
+
 - **`mcp_sentinel-grap_graph_find_blastradius`**: All downstream targets reachable from a source asset. Params: `sourceName`
 - **`mcp_sentinel-grap_graph_exposure_perimeter`**: Inbound perimeter — externally-reachable nodes with walkable paths TO a target. Params: `targetName`
   - **Known limitation:** May return empty for assets that ARE network-reachable but lack formal ExposureGraph perimeter classification. Fall back to KQL edge analysis with `EdgeLabel == "routes traffic to"` when empty.
