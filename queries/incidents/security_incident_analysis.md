@@ -74,13 +74,15 @@ SecurityIncident
     Techniques = make_set(Technique),
     AlertNames = make_set(AlertName, 5),
     AlertCount = dcount(AlertId),
-    Accounts = make_set_if(AccountUPN, isnotempty(AccountUPN), 5),
-    Devices = make_set_if(HostName, isnotempty(HostName), 5),
+    Accounts = make_set(AccountUPN, 5),
+    Devices = make_set(HostName, 5),
     Tags = take_any(Tags)
     by ProviderIncidentId, Title, Severity, Status, CreatedTime,
        OwnerUPN = tostring(Owner.userPrincipalName)
 | extend Techniques = set_difference(Techniques, dynamic([""]))
 | extend Tactics = set_difference(Tactics, dynamic([""]))
+| extend Accounts = set_difference(Accounts, dynamic([""]))
+| extend Devices = set_difference(Devices, dynamic([""]))
 | extend AgeDisplay = case(
     datetime_diff('minute', now(), CreatedTime) < 60, strcat(datetime_diff('minute', now(), CreatedTime), "m ago"),
     datetime_diff('hour', now(), CreatedTime) < 24, strcat(datetime_diff('hour', now(), CreatedTime), "h ago"),
