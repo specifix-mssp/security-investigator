@@ -1053,12 +1053,12 @@ When user specifies a device name, scope all DeviceTvm queries to that device:
 
 **Add filter to Queries 1-6, 8, 9, 11, 13, 14:**
 ```kql
-| where DeviceName =~ '<DEVICE_NAME>'
+| where DeviceName startswith '<DEVICE_NAME>'  // Use startswith — DeviceName is often FQDN (e.g., hostname.domain.com)
 ```
 
 **ExposureGraph queries (7, 15):** Filter by `NodeName`:
 ```kql
-| where NodeName =~ '<DEVICE_NAME>'
+| where NodeName has '<DEVICE_NAME>'  // Use has — NodeName may be FQDN, short name, or contain domain suffix
 ```
 
 **Per-device report differences:**
@@ -1071,6 +1071,7 @@ When user specifies a device name, scope all DeviceTvm queries to that device:
 
 | Pitfall | Impact | Mitigation |
 |---------|--------|------------|
+| `DeviceName` in TVM tables is stored as FQDN (e.g., `hostname.domain.com`) | `DeviceName =~ 'hostname'` returns 0 results — exact match fails on FQDN | **MUST** use `DeviceName startswith '<short_name>'` for per-device filtering. `startswith` matches both short names and FQDNs. Same applies to `ExposureGraphNodes.NodeName` — use `has` instead of `=~` |
 | `DeviceTvmCertificateInfo` requires Defender VM add-on | Query returns empty or error | Skip gracefully, note in report: "Certificate data requires Defender Vulnerability Management add-on" |
 | `DeviceTvmBrowserExtensions` may be empty | No browser extension data | Skip section, note as "No browser extension data available" |
 

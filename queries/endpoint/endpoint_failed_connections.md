@@ -402,7 +402,7 @@ adaptation_notes: "Honeypot-specific query requiring manual device parameter sub
 DeviceNetworkEvents
 | where TimeGenerated > ago(14d)
 // Replace with your honeypot device name:
-| where DeviceName =~ "<HONEYPOT_DEVICE>"  // Change this to your honeypot device
+| where DeviceName startswith "<HONEYPOT_DEVICE>"  // Use startswith — DeviceName is often FQDN (e.g., hostname.domain.com)
 // Focus on SUCCESSFUL inbound connections (not blocked/failed)
 | where ActionType in ("ConnectionSuccess", "InboundConnectionAccepted", "ConnectionFound")
 // Common attack ports (RDP, HTTP, HTTPS, SMB, SSH, FTP, Telnet, alt-HTTP)
@@ -460,7 +460,7 @@ adaptation_notes: "Multi-step correlation/investigation query with manual device
 // STEP 1: Get IPs that successfully connected to honeypot services
 let SuccessfulConnections = DeviceNetworkEvents
     | where TimeGenerated > ago(14d)
-    | where DeviceName =~ "<HONEYPOT_DEVICE>"  // Your honeypot device
+    | where DeviceName startswith "<HONEYPOT_DEVICE>"  // Use startswith — FQDN safe
     | where ActionType in ("ConnectionSuccess", "InboundConnectionAccepted", "ConnectionFound")
     | where LocalPort in (3389, 80, 443, 445, 22, 21, 23, 8080, 8443)
     | where RemoteIP !startswith "10." and RemoteIP !startswith "192.168." and RemoteIP !startswith "172.16."
@@ -468,7 +468,7 @@ let SuccessfulConnections = DeviceNetworkEvents
 // STEP 2: Check if ANY of those IPs successfully authenticated
 DeviceLogonEvents
 | where TimeGenerated > ago(14d)
-| where DeviceName =~ "<HONEYPOT_DEVICE>"
+| where DeviceName startswith "<HONEYPOT_DEVICE>"  // Use startswith — FQDN safe
 | where RemoteIP in (SuccessfulConnections)
 | where ActionType == "LogonSuccess"  // ⚠️ CRITICAL: Successful logins from attackers
 | summarize
