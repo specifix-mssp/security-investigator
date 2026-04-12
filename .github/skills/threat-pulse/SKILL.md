@@ -341,15 +341,21 @@ DeviceFileEvents
 
 **🔐 Identity — Portal links + bulk PowerShell:**
 
-Generate a clickable Defender XDR Identity link per user: `https://security.microsoft.com/user?aad=<ObjectId>&upn=<UPN>&tab=overview` (fallback: `?sid=<SID>&accountName=<Name>&accountDomain=<Domain>` for on-prem, `?upn=<UPN>` for external IdP). Present as a table:
+Generate a clickable Defender XDR Identity link per user: `https://security.microsoft.com/user?aad=<ObjectId>&upn=<UPN>&tab=overview` (fallback: `?sid=<SID>&accountName=<Name>&accountDomain=<Domain>` for on-prem, `?upn=<UPN>` for external IdP). Present as a table with the actual portal action names:
 
 ```markdown
-| User | Portal | Action |
+| User | Portal | Recommended Action |
 |------|--------|--------|
-| [User Name](https://security.microsoft.com/user?aad=<OID>&upn=<UPN>&tab=overview) | 🔗 Open | Block sign-in, Revoke sessions |
+| [User Name](https://security.microsoft.com/user?aad=<OID>&upn=<UPN>&tab=overview) | 🔗 Open | Confirm user compromised, Require user to sign in again |
 ```
 
-Bulk session revocation:
+Portal actions available (under `⋯` menu on Identity page):
+- **Confirm user compromised** — flags the user as compromised in Identity Protection, triggers risk-based CA policies
+- **Require user to sign in again** — revokes all refresh tokens, forces re-authentication
+- **Suspend user in app** — suspends the user's access in the connected cloud app (MCAS-governed apps)
+- **Account settings in app** — opens the user's account settings in the connected app for manual changes
+
+Bulk session revocation (PowerShell equivalent of "Require user to sign in again"):
 ```powershell
 @("<UPN1>", "<UPN2>") | ForEach-Object {
     Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/v1.0/users/$_/revokeSignInSessions"
