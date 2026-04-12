@@ -220,7 +220,7 @@ For query file prompts, substitute `ago(7d)` with `ago(30d)`. Note expansions in
    b. Compile the complete session — original Threat Pulse dashboard + all drill-down investigation results — into a single markdown file using the [Markdown File Report Template](#markdown-file-report-template)
    c. Save to `reports/threat-pulse/Threat_Pulse_YYYYMMDD_HHMMSS.md`
    d. **Weave drill-down insights into the main report** — do NOT simply append raw drill-down output. See the [Markdown File Report Template](#markdown-file-report-template) for the exact structure, including the `## Drill-Down Investigation Results` section format and the `## Cross-Investigation Correlation` section.
-   e. Remove the save option from the pool (report already saved). If no other actions were selected alongside it, return to step 2. Otherwise continue to step 5 with the remaining selections.
+   e. Remove the save option from the pool (report already saved). If no other actions were selected alongside it, **end the loop** — the investigation is complete. Otherwise continue to step 5 with the remaining selections.
 5. If user selects one or more actions:
    a. Build a **todo list** with one item per selected action, all `not-started`
    b. Execute each action **sequentially** in selection order:
