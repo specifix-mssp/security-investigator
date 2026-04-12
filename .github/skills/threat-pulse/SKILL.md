@@ -353,6 +353,22 @@ DeviceFileEvents
 
 **User fallbacks:** `?upn=<UPN>` when ObjectId is unavailable; `?sid=<SID>&accountName=<Name>&accountDomain=<Domain>` for on-prem AD.
 
+#### URL Defanging — Prevent Accidental Clicks
+
+**When displaying URLs/domains as plain text (not wrapped in a Defender XDR portal link), DEFANG them** to prevent VS Code from rendering them as clickable links. VS Code auto-linkifies anything that looks like a URL — including malicious phishing URLs in investigation results.
+
+| Original | Defanged |
+|----------|----------|
+| `http://` | `hxxp://` |
+| `https://` | `hxxps://` |
+| `.` in domain | `[.]` |
+
+**Example:** `robiox.com.py/users/page` → `robiox[.]com[.]py/users/page`
+
+**When to defang:** Data tables showing threat URLs/domains from query results (e.g., UrlClickEvents, EmailEvents phishing URLs, CloudAppEvents suspicious domains) where the value is displayed as-is, not linked to a Defender XDR portal page.
+
+**When NOT to defang:** When the URL/domain is wrapped in a Defender XDR portal link (the link target is `security.microsoft.com`, not the malicious URL).
+
 #### Rules
 
 | Rule | Status |
@@ -361,6 +377,7 @@ DeviceFileEvents
 | Take Action query missing a required column | ❌ **PROHIBITED** |
 | Email Take Action query using `project` (strips columns needed by Submit to Microsoft / Initiate Automated Investigation) | ❌ **PROHIBITED** |
 | Action table with plain-text entities (UPNs, domains, URLs, IPs, hashes) instead of clickable Defender XDR portal links | ❌ **PROHIBITED** |
+| Displaying raw (non-defanged) malicious URLs/domains as plain text in results tables | ❌ **PROHIBITED** |
 | Take Action block with correct required columns + recommended action | ✅ **REQUIRED** |
 
 ---
@@ -893,7 +910,7 @@ CloudAppEvents
 - 🟡 Monitor: `Set-Mailbox` changes
 - ✅ Clear: 0 results — none of these high-signal operations occurred
 
-**Drill-down:** Use `user-investigation` skill for actors performing suspicious mailbox operations.
+**Drill-down:** Use `user-investigation` skill for actors performing suspicious mailbox operations. **⚠️ When drilling down on ANY email-related Q9 finding, ALWAYS also query `OfficeActivity` (Exchange workload)** — CloudAppEvents and OfficeActivity are **complementary, not alternatives**. CloudAppEvents captures ActionType-based summaries and `AccountDisplayName`, but OfficeActivity provides the full `Parameters` JSON (forwarding targets: `ForwardTo`, `RedirectTo`, `ForwardingSmtpAddress`), per-operation `ClientIP`, and a broader set of Exchange audit operations — including `MoveToDeletedItems` (evidence destruction), `MailItemsAccessed` (programmatic mailbox reads), `Send` (outbound email from compromised account), `SoftDelete`/`HardDelete`, and `MailboxLogin` — that reveal post-compromise persistence, exfiltration, and lateral phishing patterns CloudAppEvents alone cannot surface. Query pattern: `OfficeActivity | where TimeGenerated > ago(Nd) | where OfficeWorkload == "Exchange" | where UserId =~ '<UPN>' | project TimeGenerated, Operation, ClientIP, Parameters, SessionId | order by TimeGenerated desc`. See `queries/email/email_threat_detection.md` for verified OfficeActivity query patterns.
 
 ---
 
