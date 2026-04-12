@@ -39,7 +39,7 @@ Generate validated, production-ready KQL queries by combining schema validation 
 
 2. **Check platform schema** — Sentinel uses `TimeGenerated`; Defender XDR uses `Timestamp`. Microsoft Learn examples default to XDR syntax — always convert before testing on Sentinel.
 
-3. **Check local query library FIRST** — Search `queries/` and `.github/skills/` before writing from scratch. See the **KQL Pre-Flight Checklist** in `copilot-instructions.md` for the full priority order.
+3. **Check local query library FIRST** — Use the discovery manifest (`.github/manifests/discovery-manifest.yaml`) for domain/MITRE lookups and `grep_search` for table-name/keyword lookups. See the **KQL Pre-Flight Checklist** in `copilot-instructions.md` for the full priority order.
 
 4. **Use multiple sources** — Schema (authoritative column names) + Microsoft Learn (official patterns) + community queries (real-world examples).
 
@@ -82,13 +82,15 @@ If the user mentions "custom detection", "detection rule", "deploy as detection"
 
 ### Step 2: Check Local Query Library
 
-Search for existing verified queries before writing from scratch:
+Search for existing verified queries before writing from scratch. Use two complementary methods:
 
-1. `grep_search` in `queries/` for the table name or keyword
-2. `grep_search` in `.github/skills/` for related investigation patterns
+1. **Manifest lookup (domain/MITRE):** Read `.github/manifests/discovery-manifest.yaml` and match by **domain tag** (e.g., `identity`, `endpoint`, `email`) or **MITRE technique ID** (e.g., `T1078`, `T1566`). Best when you know the security domain or ATT&CK technique.
+2. **Targeted `grep_search` (table/keyword):** `grep_search` for the **specific table name** (e.g., `CloudAppEvents`, `OfficeActivity`) or **operation keyword** (e.g., `New-InboxRule`, `SecretGet`) scoped to `queries/**` and `.github/skills/**`. The manifest lacks table-name and keyword fields — grep fills this gap.
 3. Check the **Ad-Hoc Query Examples** appendix in `copilot-instructions.md`
 
-If a suitable query exists, adapt it and skip to Step 6. These queries encode known pitfalls and schema quirks.
+**When to use which:** Domain/technique known → manifest first. Table name/operation known → grep first. Both can be used together — manifest for breadth, grep for precision.
+
+If a suitable query is found, adapt it and skip to Step 6. These queries encode known pitfalls and schema quirks.
 
 ### Step 3: Get Table Schema (MANDATORY)
 

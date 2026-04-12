@@ -13,9 +13,19 @@ import json
 import os
 import sys
 import requests
+from requests.adapters import HTTPAdapter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 from pathlib import Path
+
+# Force UTF-8 stdout on Windows to prevent UnicodeEncodeError with box-drawing/emoji chars
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
+# Total timeout per HTTP request (connect + read combined ceiling)
+# requests' timeout param is per-socket-op; this caps the entire call
+REQUEST_TOTAL_TIMEOUT = 8  # seconds — prevents slow APIs from hanging the process
 
 # AbuseIPDB category ID to name mapping
 ABUSE_CATEGORIES = {
@@ -84,12 +94,15 @@ def enrich_single_ip(ip: str, config: dict) -> dict:
         'shodan_last_update': None,  # When Shodan last scanned this IP
     }
     
+    # Use a session for connection pooling within this IP's enrichment
+    session = requests.Session()
+
     # 1. IPInfo.io enrichment
     ipinfo_token = config.get('ipinfo_token')
     try:
         url = f"https://ipinfo.io/{ip}/json"
         params = {'token': ipinfo_token} if ipinfo_token else {}
-        response = requests.get(url, params=params, timeout=5)
+        response = session.get(url, params=params, timeout=REQUEST_TOTAL_TIMEOUT)
         
         if response.status_code == 200:
             ipinfo_data = response.json()
@@ -126,7 +139,7 @@ def enrich_single_ip(ip: str, config: dict) -> dict:
     try:
         url = f"https://vpnapi.io/api/{ip}"
         params = {'key': vpnapi_token} if vpnapi_token else {}
-        response = requests.get(url, params=params, timeout=5)
+        response = session.get(url, params=params, timeout=REQUEST_TOTAL_TIMEOUT)
         
         if response.status_code == 200:
             vpnapi_data = response.json()
@@ -152,7 +165,7 @@ def enrich_single_ip(ip: str, config: dict) -> dict:
                 'maxAgeInDays': 90,
                 'verbose': ''
             }
-            response = requests.get(url, headers=headers, params=params, timeout=5)
+            response = session.get(url, headers=headers, params=params, timeout=REQUEST_TOTAL_TIMEOUT)
             
             if response.status_code == 200:
                 abuse_data = response.json().get('data', {})
@@ -173,7 +186,7 @@ def enrich_single_ip(ip: str, config: dict) -> dict:
                     'maxAgeInDays': 90,
                     'perPage': 5  # Get 5 most recent
                 }
-                reports_response = requests.get(reports_url, headers=headers, params=reports_params, timeout=5)
+                reports_response = session.get(reports_url, headers=headers, params=reports_params, timeout=REQUEST_TOTAL_TIMEOUT)
                 
                 if reports_response.status_code == 200:
                     reports_data = reports_response.json().get('data', {}).get('results', [])
@@ -197,8 +210,8 @@ def enrich_single_ip(ip: str, config: dict) -> dict:
     if shodan_token:
         try:
             url = f"https://api.shodan.io/shodan/host/{ip}"
-            params = {'key': shodan_token, 'minify': 'false'}
-            response = requests.get(url, params=params, timeout=10)
+            params = {'key': shodan_token, 'minify': 'true'}
+            response = session.get(url, params=params, timeout=REQUEST_TOTAL_TIMEOUT)
             
             if response.status_code == 200:
                 shodan_full_ok = True
@@ -239,7 +252,7 @@ def enrich_single_ip(ip: str, config: dict) -> dict:
     if not shodan_full_ok:
         try:
             url = f"https://internetdb.shodan.io/{ip}"
-            response = requests.get(url, timeout=5)
+            response = session.get(url, timeout=REQUEST_TOTAL_TIMEOUT)
             
             if response.status_code == 200:
                 idb_data = response.json()
@@ -251,6 +264,7 @@ def enrich_single_ip(ip: str, config: dict) -> dict:
         except Exception as e:
             print(f"  [Shodan InternetDB] Error for {ip}: {str(e)}", file=sys.stderr)
     
+    session.close()
     return result
 
 
@@ -520,20 +534,47 @@ def main():
     # Enrich IPs
     results = enrich_ips(ip_list)
     
-    # Display results
-    print_detailed_results(results)
-    print_abuse_comments(results)
-    print_shodan_details(results)
-    print_summary(results)
-    
-    # Optionally save to JSON
+    # Save JSON results
     from datetime import datetime
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     output_file = Path('temp') / f'ip_enrichment_{timestamp}.json'
     output_file.parent.mkdir(exist_ok=True)
     with open(output_file, 'w') as f:
         json.dump(results, f, indent=2)
-    print(f"\nResults saved to: {output_file}")
+    
+    # Write verbose report to a text file (keeps terminal output small for VS Code)
+    report_file = Path('temp') / f'ip_enrichment_{timestamp}.txt'
+    with open(report_file, 'w', encoding='utf-8') as rf:
+        _original_stdout = sys.stdout
+        sys.stdout = rf
+        print_detailed_results(results)
+        print_abuse_comments(results)
+        print_shodan_details(results)
+        print_summary(results)
+        sys.stdout = _original_stdout
+    
+    # Print only a compact summary to terminal (avoids VS Code output-capture freeze)
+    print(f"\n{'='*80}")
+    print(f"IP Enrichment Complete: {len(results)} IPs")
+    print(f"{'='*80}")
+    for item in sorted(results, key=lambda x: x['abuse_confidence_score'], reverse=True):
+        flags = []
+        if item['is_vpn'] or item['vpnapi_security_vpn']:
+            flags.append("VPN")
+        if item['is_proxy'] or item['vpnapi_security_proxy']:
+            flags.append("Proxy")
+        if item['is_tor'] or item['vpnapi_security_tor']:
+            flags.append("Tor")
+        if item['abuse_confidence_score'] > 0:
+            flags.append(f"Abuse:{item['abuse_confidence_score']}%")
+        if item['shodan_vulns']:
+            flags.append(f"CVEs:{len(item['shodan_vulns'])}")
+        if item['shodan_ports']:
+            flags.append(f"Ports:{len(item['shodan_ports'])}")
+        flag_str = f"[{', '.join(flags)}]" if flags else "[Clean]"
+        print(f"  {item['ip']:<17} {item['country']:<3} {item['city']:<18} {flag_str}")
+    print(f"\nJSON: {output_file}")
+    print(f"Full report: {report_file}")
 
 
 if __name__ == '__main__':

@@ -440,14 +440,15 @@ AlertInfo
 | where Title == "Anomalous Token"
 | join (AlertEvidence 
     | where Timestamp > ago(7d) 
-    | where EntityType == "CloudLogonSession") on AlertId
-| project sessionId = todynamic(AdditionalFields).SessionId);
+    | where EntityType == "CloudLogonSession"
+    | project AlertId, AdditionalFields) on AlertId
+| project sessionId = tostring(parse_json(AdditionalFields).SessionId));
 let hasSuspiciousSessionIds = isnotempty(toscalar(suspiciousSessionIds));
 CloudAppEvents
-| where hasSuspiciousSessionIds
 | where Timestamp > ago(21d)
+| where hasSuspiciousSessionIds
 | where ActionType == "New-InboxRule"
-| where RawEventData.SessionId in (suspiciousSessionIds)
+| where tostring(parse_json(tostring(RawEventData)).SessionId) in (suspiciousSessionIds)
 ```
 
 ### Query 6: Suspicious Inbox Rules for Forwarding/Redirect (Sentinel Data Lake)

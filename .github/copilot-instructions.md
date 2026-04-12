@@ -118,13 +118,15 @@ Before writing or executing any **ad-hoc KQL query** (i.e., not from a SKILL.md 
 
 | Priority | Source | Action |
 |----------|--------|--------|
-| 1st | **Skills directory** (`.github/skills/`) | `grep_search` for the table name or entity pattern scoped to `.github/skills/**`. These are battle-tested queries with known pitfalls documented. |
-| 2nd | **Queries library** (`queries/`) | `grep_search` for the table name, keyword, or technique scoped to `queries/**`. These are standalone verified query collections with standardized metadata headers (Tables, Keywords, MITRE fields). |
+| 1st | **Discovery manifest** (`.github/manifests/discovery-manifest.yaml`) | Read the manifest and match by **domain tag** (e.g., `identity`, `endpoint`, `email`) or **MITRE technique ID** (e.g., `T1078`, `T1566`). The manifest indexes all query files and skills with `title`, `path`, `domains`, `mitre`, and `prompt` fields. Best when you know the security domain or ATT&CK technique — skips scanning individual files. |
+| 2nd | **Targeted `grep_search`** (skills + queries) | `grep_search` for the **specific table name** (e.g., `CloudAppEvents`, `OfficeActivity`) or **operation keyword** (e.g., `New-InboxRule`, `SecretGet`) scoped to `queries/**` and `.github/skills/**`. The manifest lacks table-name and keyword fields — grep fills this gap for table-specific lookups. |
 | 3rd | **This file's Appendix** | Check [Ad-Hoc Query Examples](#appendix-ad-hoc-query-examples) for canonical patterns (SecurityAlert→SecurityIncident join, AuditLogs best practices, etc.) |
 | 4th | **KQL Search MCP** | Use `search_github_examples_fallback` or `validate_kql_query` for community-published examples |
 | 5th | **Microsoft Learn MCP** | Use `microsoft_code_sample_search` with `language: "kusto"` for official examples |
 
-**Short-circuit rule:** If a suitable query is found in Priority 1 (skills), Priority 2 (queries library), or Priority 3 (Appendix), skip Steps 2–4 and use it directly (substituting entity values). These sources are already schema-verified and pitfall-aware. Step 5 (sanity-check zero results) still applies.
+**When to use which:** If you know the **domain** ("identity threat") or **MITRE technique** (T1078) → start with Priority 1 (manifest). If you know the **table name** (`AuditLogs`) or **specific operation** (`Set-Mailbox`) → start with Priority 2 (grep). Both can be used together — manifest for breadth, grep for precision.
+
+**Short-circuit rule:** If a suitable query is found in Priority 1 (manifest), Priority 2 (grep), or Priority 3 (Appendix), skip Steps 2–4 and use it directly (substituting entity values). These sources are already schema-verified and pitfall-aware. Step 5 (sanity-check zero results) still applies.
 
 ### Step 2: Verify Table Schema
 
