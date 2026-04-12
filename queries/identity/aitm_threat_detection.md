@@ -25,6 +25,11 @@ This document synthesizes intelligence from [Jeffrey Appel's 2026 AiTM guide](ht
 
 ## Quick Reference — Query Index
 
+**Investigation shortcuts:**
+- **Suspected AiTM compromise:** **Q7** (token replay) + **Q3** (risk events) + **Q5** (inbox rules)
+- **AiTM posture assessment:** See **Part 2** (defensive program)
+- **Response actions:** See **Part 5** (response playbook)
+
 | # | Query | Use Case | Key Table |
 |---|-------|----------|-----------|
 | 1 | [AiTM Proxy Sign-In — OfficeHome Multi-Country Session (Advanced Hun...](#query-1-aitm-proxy-sign-in--officehome-multi-country-session-advanced-hunting) | Investigation | `EntraIdSignInEvents` |

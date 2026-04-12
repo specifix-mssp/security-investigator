@@ -224,24 +224,39 @@ def process_file(filepath: Path) -> bool:
         content = f.read()
     
     # Strip existing auto-generated TOC if present (for re-runs)
+    # Preserves any manually-added "Investigation shortcuts:" content
     lines = content.split("\n")
+    preserved_shortcuts = []
     if "Quick Reference" in content:
-        # Find and remove the old TOC block
         toc_start = None
+        table_start = None
         toc_end = None
         for i, line in enumerate(lines):
             if line.startswith("## Quick Reference"):
                 toc_start = i
-            elif toc_start is not None and toc_end is None:
-                # TOC ends at next ## heading or --- separator
-                if (line.startswith("## ") and not line.startswith("## Quick")) or line.startswith("---"):
+            elif toc_start is not None and table_start is None and line.startswith("|"):
+                table_start = i
+            elif table_start is not None and toc_end is None:
+                if not line.startswith("|") and line.strip() != "":
                     toc_end = i
                     break
         if toc_start is not None and toc_end is not None:
-            # Remove TOC + any blank lines between TOC and next section
-            while toc_end < len(lines) and lines[toc_end].strip() == "":
-                toc_end += 1
-            lines = lines[:toc_start] + lines[toc_end:]
+            if table_start is None:
+                table_start = toc_start + 1
+            # Capture shortcuts between heading and table
+            for j in range(toc_start + 1, table_start):
+                if lines[j].strip() and not lines[j].startswith("|"):
+                    preserved_shortcuts.append(lines[j])
+            # Also capture any content between table end and next ## heading
+            footer_end = toc_end
+            for j in range(toc_end, len(lines)):
+                if lines[j].startswith("## ") or lines[j].startswith("---"):
+                    footer_end = j
+                    break
+            for l in lines[toc_end:footer_end]:
+                if l.strip():
+                    preserved_shortcuts.append(l)
+            lines = lines[:toc_start] + lines[footer_end:]
             content = "\n".join(lines)
     
     lines = content.split("\n")
@@ -264,8 +279,14 @@ def process_file(filepath: Path) -> bool:
     
     insertion_point = find_insertion_point(lines)
     
-    # Insert TOC before the first ## section
-    new_lines = lines[:insertion_point] + [toc, ""] + lines[insertion_point:]
+    # Insert TOC before the first ## section, with preserved shortcuts before the table
+    if preserved_shortcuts:
+        shortcuts_block = "\n".join(preserved_shortcuts)
+        # Insert: heading + shortcuts + blank + table
+        toc_with_shortcuts = f"## Quick Reference — Query Index\n\n{shortcuts_block}\n\n" + "\n".join(toc.split("\n")[2:])  # skip the heading from generated toc
+        new_lines = lines[:insertion_point] + [toc_with_shortcuts, ""] + lines[insertion_point:]
+    else:
+        new_lines = lines[:insertion_point] + [toc, ""] + lines[insertion_point:]
     
     with open(filepath, "w", encoding="utf-8") as f:
         f.write("\n".join(new_lines))

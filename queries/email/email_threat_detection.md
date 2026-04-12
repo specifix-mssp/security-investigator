@@ -18,6 +18,11 @@ This collection of KQL queries covers email-based threat detection across the Mi
 
 ## Quick Reference — Query Index
 
+**Investigation shortcuts:**
+- **Delivered phishing drill-down:** **2.4** (recipients) + **7.6** (URL clicks) + **3.3** (inbox rules)
+- **ZAP failures:** **6.2** (failed ZAP) → **6.3** (user activity after)
+- **AiTM full chain:** **3.2** (phishing → token → inbox rule)
+
 | # | Query | Use Case | Key Table |
 |---|-------|----------|-----------|
 | 1.1 | [Inbound Email Summary with Threat Breakdown](#11-inbound-email-summary-with-threat-breakdown) | Dashboard | `EmailEvents` |

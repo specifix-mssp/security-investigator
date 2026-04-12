@@ -18,6 +18,11 @@ This file covers **two RDP threat scenarios** with queries for both `SecurityEve
 
 ## Quick Reference — Query Index
 
+**Investigation shortcuts:**
+- **Internet-facing device:** **Q7/Q10** (brute-force summary) + **Q9/Q12** (breach correlation)
+- **Internal lateral movement:** **Q2** (failed-then-success)
+- **Part B vs Part C:** Use Part B if SecurityEvent connector is configured, fall back to Part C (DeviceLogonEvents) if not
+
 | # | Query | Use Case | Key Table |
 |---|-------|----------|-----------|
 | 1 | [Successful RDP Authentications (Baseline)](#query-1-successful-rdp-authentications-baseline) | Dashboard | `SecurityEvent` |

@@ -192,6 +192,8 @@ Include per-query documentation with Purpose, Thresholds, Expected Results, and 
 - **Non-query sections** (context, deployment, tuning, references): Use heading text that starts with a non-query keyword (e.g., `### Deployment`, `### Tuning`, `### References`). These are automatically filtered out by the TOC generator
 - **Avoid** using `### ` headings for non-query content that contains a KQL code block within 40 lines — the TOC generator uses KQL proximity to detect query headings and will incorrectly include them
 
+**Investigation shortcuts (optional):** Query files can include an `**Investigation shortcuts:**` bulleted list between the `## Quick Reference` heading and the TOC table. These document recommended query combos for common investigation scenarios (e.g., "Delivered phishing drill-down: Q2.4 + Q7.6 + Q3.3"). Shortcuts are preserved by `generate_tocs.py` across re-runs. Don't add them to new files — they're a refinement added after real investigations reveal which query combos work best together.
+
 ### CD-Aware Output
 
 When CD intent is detected (Step 1), each query MUST include a `<!-- cd-metadata -->` HTML comment block. The full schema is in `.github/skills/detection-authoring/SKILL.md` under CD Metadata Contract.
