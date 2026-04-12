@@ -14,6 +14,19 @@
 
 This collection of KQL queries helps detect potential RDP lateral movement within your internal network. Lateral movement via RDP is a common technique used by attackers after initial compromise, where they attempt to move from one system to another using Remote Desktop Protocol.
 
+### ⚠️ Table Coverage — Read Before Executing
+
+**Primary table: `SecurityEvent`** — All queries in this file use Windows Security Event logs (EventID 4624/4625, LogonType 10). This is the authoritative source for RDP authentication events including failed logon attempts (brute-force detection).
+
+**Supplementary table: `DeviceLogonEvents`** — The MDE table can provide additional coverage but has different semantics. If you use `DeviceLogonEvents` as a supplement, always run the `SecurityEvent` queries **first** — do NOT substitute one for the other. `DeviceLogonEvents` may have different event coverage, especially for NLA-blocked connections.
+
+| Table | Strengths | Limitations |
+|-------|-----------|-------------|
+| `SecurityEvent` (primary) | Granular Win Security log: EventIDs, SubStatus codes, failure reasons, Kerberos/NTLM detail | Requires Windows Security Event connector; may not exist for all devices |
+| `DeviceLogonEvents` (supplement) | MDE-normalized, works in AH | Less granular failure detail; may not capture all 4625 events |
+
+**🔴 RULE:** When this file is referenced for a query file hunt, execute the `SecurityEvent`-based queries with entity substitution. Do not rewrite against `DeviceLogonEvents` only.
+
 **Key Detection Patterns:**
 - Multiple failed authentication attempts from same source before success
 - Unusual RDP connections between internal systems

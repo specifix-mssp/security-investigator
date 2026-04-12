@@ -225,7 +225,7 @@ For query file prompts, substitute `ago(7d)` with `ago(30d)`. Note expansions in
    a. Build a **todo list** with one item per selected action, all `not-started`
    b. Execute each action **sequentially** in selection order:
       - **Skill prompt:** load the skill's SKILL.md, execute the investigation with the target entity
-      - **Query file prompt:** read the query file, add as context, execute the hunt
+      - **📄 Query file prompt:** read the query file, then **execute the queries from the file verbatim** with entity value substitution. See [📄 Query File Execution Rule](#-query-file-execution-rule) below.
       - **IOC prompt:** load `ioc-investigation` skill, execute with the target indicator
       - Mark each todo `completed` as it finishes
       - **⛔ MANDATORY session state capture:** After each drill-down completes, append a structured summary to `/memories/session/threat-pulse-drilldowns.md`. Create the file on first drill-down. Append one entry per drill-down:
@@ -264,6 +264,23 @@ For query file prompts, substitute `ago(7d)` with `ago(30d)`. Note expansions in
   **✅ CORRECT — one action per option, correlation context in Description only:**
   - Option 1 — Label: `🔍 Investigate user cameron@contoso.com` / Description: `Q2+Q9: Identity risk (AtRisk, aiCompoundAccountRisk + anonymizedIPAddress) + inbox rule manipulation — potential email exfiltration → user-investigation`
   - Option 2 — Label: `📄 Hunt delivered phishing emails and recipients` / Description: `Q8: Trace the 4 delivered phishing emails → queries/email/email_threat_detection.md`
+
+### 📄 Query File Execution Rule
+
+**⛔ MANDATORY — applies to ALL `📄` query file prompt executions in Phase 4.**
+
+When executing a `📄` prompt, use the queries **from the file verbatim** with entity substitution. Do NOT rewrite queries against different tables than the file specifies.
+
+1. Read the query file and select the relevant queries for the hunt
+2. Substitute entity values (hostnames, IPs, UPNs) and adjust `ago(Nd)` lookback if context-aware expansion applies
+3. Execute using the file's exact tables, columns, and filters
+4. If supplementing with additional tables, execute the file's queries **first**, then add your own — clearly label which are from the file vs. supplementary
+
+| Action | Status |
+|--------|--------|
+| Reading a query file then writing queries against a different table | ❌ **PROHIBITED** |
+| Using the query file as "inspiration" and rewriting from scratch | ❌ **PROHIBITED** |
+| Executing the file's queries verbatim with entity substitution | ✅ **REQUIRED** |
 
 ---
 
@@ -365,9 +382,10 @@ SecurityIncident
 
 ```kql
 SecurityIncident
-| where TimeGenerated > ago(7d)
+| where CreatedTime > ago(7d)
 | summarize arg_max(TimeGenerated, *) by IncidentNumber
 | where Status == "Closed"
+| where array_length(AlertIds) > 0
 | mv-expand AlertId = AlertIds | extend AlertId = tostring(AlertId)
 | join kind=leftouter (
     SecurityAlert
@@ -394,7 +412,7 @@ SecurityIncident
 | extend Tactics = set_difference(Tactics, dynamic([""]))
 ```
 
-**Purpose:** Provides a 7-day closed incident summary with classification breakdown (TP/BP/FP/Undetermined), severity distribution, aggregated MITRE tactics, and aggregated MITRE technique IDs. This data feeds three downstream uses:
+**Purpose:** Provides a 7-day closed incident summary with classification breakdown (TP/BP/FP/Undetermined), severity distribution, aggregated MITRE tactics, and aggregated MITRE technique IDs. Uses `CreatedTime` (not `TimeGenerated`) to match portal "created in last 7 days" semantics — `TimeGenerated` captures any incident *updated* in the window, inflating counts with old incidents. Filters `array_length(AlertIds) > 0` to exclude phantom incidents — the SecurityIncident table contains hundreds of records synced from XDR with empty AlertIds that never surface in the Defender XDR portal queue (see copilot-instructions.md Known Table Pitfalls). This data feeds three downstream uses:
 1. **TP rate signal** — High TruePositive ratio indicates an active threat environment
 2. **MITRE tactic context** — Tactics from closed TPs identify the current threat landscape for cross-correlation with Q2/Q7/Q8 findings
 3. **Manifest MITRE matching** — The `Techniques` array contains ATT&CK technique IDs (e.g., `T1566`, `T1078`, `T1059`) directly matchable against manifest entry `mitre` fields. No tactic→technique mapping needed — the technique IDs are the primary matching key for query file recommendations
