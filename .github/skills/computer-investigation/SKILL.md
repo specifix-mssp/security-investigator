@@ -250,7 +250,7 @@ Use Advanced Hunting or Defender API to find the MDE device ID:
 DeviceInfo
 | where DeviceName startswith '<DEVICE_NAME>'  // Use startswith to match both hostname and FQDN
 | summarize arg_max(TimeGenerated, *) by DeviceName
-| project DeviceId, DeviceName, OSPlatform, OSVersion, MachineGroup, OnboardingStatus, ExposureLevel, SensorHealthState
+| project DeviceId, DeviceName, OSPlatform, OSVersion, MachineGroup, OnboardingStatus, ExposureLevel, SensorHealthState, MachineTags
 ```
 **Note:** RiskScore is NOT in DeviceInfo - use `GetDefenderMachine` API to get riskScore and exposureLevel.
 
@@ -663,7 +663,8 @@ DeviceInfo
     IsAzureADJoined,
     IsInternetFacing,
     JoinType,
-    PublicIP
+    PublicIP,
+    MachineTags
 ```
 
 ### 9. Software Inventory on Device
@@ -802,7 +803,7 @@ mcp_microsoft_mcp_microsoft_graph_get("/v1.0/deviceManagement/managedDevices?$fi
 ```
 GetDefenderMachine(id="<DEFENDER_DEVICE_ID>")
 ```
-Returns: id, computerDnsName, osPlatform, osVersion, healthStatus, onboardingStatus, riskScore, exposureLevel, lastSeen, lastIpAddress, lastExternalIpAddress, rbacGroupName
+Returns: id, computerDnsName, osPlatform, osVersion, healthStatus, onboardingStatus, riskScore, exposureLevel, lastSeen, lastIpAddress, lastExternalIpAddress, rbacGroupName, machineTags
 
 ### Get Logged-On Users
 ```
@@ -888,6 +889,7 @@ When outputting to markdown file (Mode 2), use this template. Populate ALL secti
 | **Last Internal IP** | <ip_address> |
 | **Last External IP** | <ip_address> |
 | **Machine Group** | <group_name> |
+| **Device Tags** | <comma-separated list from machineTags, or "None"> |
 
 ### Device Owners & Registered Users
 
