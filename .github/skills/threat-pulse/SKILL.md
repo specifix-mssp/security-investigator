@@ -273,8 +273,9 @@ When executing a `📄` prompt, use the queries **from the file verbatim** with 
 
 1. Read the query file and select the relevant queries for the hunt
 2. Substitute entity values (hostnames, IPs, UPNs) and adjust `ago(Nd)` lookback if context-aware expansion applies
-3. Execute using the file's exact tables, columns, and filters
-4. If supplementing with additional tables, execute the file's queries **first**, then add your own — clearly label which are from the file vs. supplementary
+3. **⚠️ Hostname-safe substitution:** Device names vary across tables (short hostname vs FQDN vs uppercase). NEVER use `==` for device/computer filters — use `startswith` (default, case-insensitive, matches both short name and FQDN), or `in~` (multi-device). Override `==` in query file entity substitution notes with `startswith`.
+4. Execute using the file's exact tables, columns, and filters
+5. If supplementing with additional tables, execute the file's queries **first**, then add your own — clearly label which are from the file vs. supplementary
 
 | Action | Status |
 |--------|--------|

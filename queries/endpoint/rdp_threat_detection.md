@@ -496,7 +496,7 @@ title: "External RDP Brute-Force: {{SourceIP}} → {{Computer}} ({{FailedAttempt
 impactedAssets:
   - type: "device"
     identifier: "deviceName"
-adaptation_notes: "NLA-aware. No minimum threshold — every external RDP failure surfaces. For CD deployment, consider adding `| where FailedAttempts >= 5` to reduce alert volume. Entity substitution: add `| where Computer == 'HOSTNAME'` to scope to a specific device. Remove the Computer filter for fleet-wide scan."
+adaptation_notes: "NLA-aware. No minimum threshold — every external RDP failure surfaces. For CD deployment, consider adding `| where FailedAttempts >= 5` to reduce alert volume. Entity substitution: add `| where Computer startswith 'HOSTNAME'` to scope to a specific device (case-insensitive, matches short name or FQDN). Remove the Computer filter for fleet-wide scan."
 -->
 ```kql
 // External RDP Brute-Force Summary (SecurityEvent)
@@ -531,7 +531,7 @@ SecurityEvent
 | take 25
 ```
 
-**Entity substitution:** Add `| where Computer == "<HOSTNAME>"` after the `EventID` filter to scope to a specific internet-facing device.
+**Entity substitution:** Add `| where Computer startswith "<HOSTNAME>"` after the `EventID` filter to scope to a specific device (case-insensitive, matches short name or FQDN).
 
 **Verdict guidance:**
 - **`FailedAttempts >= 50`:** Automated brute-force — consider IP block
@@ -559,7 +559,7 @@ title: "External RDP Access: {{Account}} from {{SourceIP}} on {{Computer}}"
 impactedAssets:
   - type: "device"
     identifier: "deviceName"
-adaptation_notes: "High-severity alert. Exclude known VPN/Bastion IPs via allowlist. Entity substitution: add `| where Computer == 'HOSTNAME'` for device-specific scoping."
+adaptation_notes: "High-severity alert. Exclude known VPN/Bastion IPs via allowlist. Entity substitution: add `| where Computer startswith 'HOSTNAME'` for device-specific scoping (case-insensitive, matches short name or FQDN)."
 -->
 ```kql
 // Successful External RDP Access (SecurityEvent)
@@ -638,7 +638,7 @@ ExternalFailed
 | order by FailedAttempts desc
 ```
 
-**Entity substitution:** Add `| where Computer == "<HOSTNAME>"` inside both `let` blocks after the `EventID` filter.
+**Entity substitution:** Add `| where Computer startswith "<HOSTNAME>"` inside both `let` blocks after the `EventID` filter (case-insensitive, matches short name or FQDN).
 
 ---
 
