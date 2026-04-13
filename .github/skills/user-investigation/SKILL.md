@@ -35,6 +35,8 @@ This skill performs comprehensive security investigations on Entra ID user accou
 - **IP enrichment for user** (TP Q3+Q4): **Q1** (priority IP extraction) → **Q11** (TI matches) → `enrich_ips.py`
 - **UEBA behavioral context** (TP Q3, portal UEBA anomalies): **Q12** (Anomalies table) → **Q6** (related incidents) → **Q4** (audit trail)
 
+> **⛔ Shortcut Default Rule:** When a matching shortcut exists for the investigation context, **use it** — don't run the full workflow. Only run full Batch 1 + Batch 2 when the user explicitly requests "full investigation", "comprehensive", or "deep dive". Shortcuts render only the report sections relevant to their query chain (plus Executive Summary and Recommendations, always).
+
 ---
 
 ## ⚠️ CRITICAL WORKFLOW RULES - READ FIRST ⚠️

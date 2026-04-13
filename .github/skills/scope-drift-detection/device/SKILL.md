@@ -57,6 +57,8 @@ This skill detects **scope drift** — the gradual, often imperceptible expansio
 - **Fleet uniformity assessment** (TP Q6, all devices clustered): **Q14** (fleet-wide daily trend) → **Q15** (per-device breakdown) → **Q22** (per-session volume — confirms burst vs sustained activity)
 - **Unsigned binary investigation** (standalone): **Q19** (unsigned/unusual signing companies in recent window) → **Q16** (first-seen process overlap) → **Q20** (command-line patterns for flagged binaries)
 
+> **⛔ Shortcut Default Rule:** When a matching shortcut exists for the investigation context, **use it** — don't run the full workflow. Only run the full query set when the user explicitly requests "full investigation", "comprehensive", or "deep dive". Shortcuts render only the report sections relevant to their query chain (plus Executive Summary and Recommendations, always).
+
 ---
 
 ## ⚠️ CRITICAL WORKFLOW RULES - READ FIRST ⚠️

@@ -39,6 +39,8 @@ This skill performs comprehensive security investigations on Windows, macOS, and
 - **Brute-forced endpoint** (TP Q4): **Q11** (logon events) → **Q4** (outbound connections) → **Q12** (TI IP matches)
 - **Vulnerability assessment** (TP Q12): **Q9** (software inventory) → **Q10** (CVEs on device) → **Q8** (exposure score)
 
+> **⛔ Shortcut Default Rule:** When a matching shortcut exists for the investigation context, **use it** — don't run the full workflow. Only run the full query set when the user explicitly requests "full investigation", "comprehensive", or "deep dive". Shortcuts render only the report sections relevant to their query chain (plus Executive Summary and Recommendations, always).
+
 ---
 
 ## ⚠️ CRITICAL WORKFLOW RULES - READ FIRST ⚠️

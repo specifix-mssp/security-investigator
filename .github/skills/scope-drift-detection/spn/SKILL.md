@@ -52,6 +52,8 @@ This skill detects **scope drift** — the gradual, often imperceptible expansio
 - **Permission escalation investigation** (TP Q10, standalone): **Q2** (AuditLog summary — operation counts baseline vs recent) → **Q3** (detailed per-operation rows with initiator/target/modified properties) → Graph API: app permission audit
 - **IP infrastructure expansion** (TP Q5, high IPDrift): **Q1** (new IPs list from `NewIPs` array) → anti-join baseline IPs to identify novel sources → IP enrichment (`enrich_ips.py` or `ioc-investigation`) for non-Azure IPs
 
+> **⛔ Shortcut Default Rule:** When a matching shortcut exists for the investigation context, **use it** — don't run the full workflow. Only run the full query set when the user explicitly requests "full investigation", "comprehensive", or "deep dive". Shortcuts render only the report sections relevant to their query chain (plus Executive Summary and Recommendations, always).
+
 ---
 
 ## ⚠️ CRITICAL WORKFLOW RULES - READ FIRST ⚠️

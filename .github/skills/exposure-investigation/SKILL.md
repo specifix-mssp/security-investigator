@@ -55,6 +55,8 @@ This skill generates a comprehensive **Vulnerability & Exposure Management Repor
 - **Attack path analysis** (TP Q11+Q12): **Q10a** (vulnerable device exposure) → **Q10b** (1-hop blast radius) → **Q15** (internet-facing critical + vulns) → **Q16** (multi-hop paths, optional)
 - **Software version sprawl** (after Q14 or Q2): **Q14** (top vulnerable software) → **Q17** (version sprawl by source) → **Q18** (CVE to file mapping) → **Q19** (stale extension folders)
 
+> **⛔ Shortcut Default Rule:** When a matching shortcut exists for the investigation context, **use it** — don't run the full workflow. Only run the full query set when the user explicitly requests "full investigation", "comprehensive", or "deep dive". Shortcuts render only the report sections relevant to their query chain (plus Executive Summary and Recommendations, always).
+
 ---
 
 ## ⚠️ CRITICAL WORKFLOW RULES - READ FIRST ⚠️

@@ -37,6 +37,8 @@ The investigation correlates IoCs with Microsoft Defender Threat Intelligence, i
 - **File hash from incident** (TP Q1): **Q7** (file events across all tables) → **Q9** (security alerts) → **Q10** (custom indicator check) → **Q12** (CVE extraction)
 - **IoC organizational exposure** (TP Q1+Q11): **Q2/Q4** (affected devices) → **Q9** (alert correlation) → **Q12** (CVEs from alerts)
 
+> **⛔ Shortcut Default Rule:** When a matching shortcut exists for the investigation context, **use it** — don't run the full workflow. Only run the full query set when the user explicitly requests "full investigation", "comprehensive", or "deep dive". Shortcuts render only the report sections relevant to their query chain (plus Executive Summary and Recommendations, always).
+
 ---
 
 ## ⚠️ CRITICAL WORKFLOW RULES - READ FIRST ⚠️

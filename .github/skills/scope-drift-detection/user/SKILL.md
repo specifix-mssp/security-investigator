@@ -50,6 +50,14 @@ This skill detects **scope drift** — the gradual, often imperceptible expansio
 9. **[Error Handling](#error-handling)** - Troubleshooting guide
 10. **[SVG Dashboard Generation](#svg-dashboard-generation)** - Visual dashboard from report
 
+**Investigation shortcuts:**
+- **User drift triage** (TP Q3): **Q6** + **Q7** (baseline vs recent — both drift scores + dimension ratios) → **Q11** (alert/incident correlation) → Tier 1 deep dives for flagged users
+- **Compromised user forensics** (TP Q3 + incident context): **Q6** + **Q7** (behavioral profile) → **Q8** (AuditLog changes — password/MFA/role changes, timestamps, actors) → **Q10** (Identity Protection risk events) → **Q11** (incident status/classification)
+- **Sign-in anomaly investigation** (TP Q3, high anomaly count): **Q6** + **Q7** (drift scores) → **Q9** (custom anomaly table — new IPs, device combos, geo novelty) → **Q10** (Identity Protection cross-reference)
+- **Cloud app activity expansion** (standalone or TP Q9): **Q6** (interactive baseline context) → **Q12** (CloudAppEvents — new action types, admin ops, impersonation) → **Q11** (alert correlation)
+
+> **⛔ Shortcut Default Rule:** When a matching shortcut exists for the investigation context, **use it** — don't run the full workflow. Only run the full query set when the user explicitly requests "full investigation", "comprehensive", or "deep dive". Shortcuts render only the report sections relevant to their query chain (plus Executive Summary and Recommendations, always).
+
 ---
 
 ## ⚠️ CRITICAL WORKFLOW RULES - READ FIRST ⚠️
