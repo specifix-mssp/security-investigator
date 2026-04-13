@@ -28,11 +28,12 @@ This skill performs comprehensive security investigations on Entra ID user accou
 11. **[SVG Dashboard Generation](#svg-dashboard-generation)** - Visual dashboard from report data
 
 **Investigation shortcuts:**
-- **Risky user quick triage** (TP Q3): **Q6** (security incidents) → **Q2** (anomalies) → **Q3d** (sign-ins by IP) → Graph: MFA methods
+- **Risky user quick triage** (TP Q3): **Q6** (security incidents) → **Q2** (anomalies) → **Q12** (UEBA anomalies) → **Q3d** (sign-ins by IP) → Graph: MFA methods
 - **Compromised user forensics** (TP Q3+Q9): **Q3** (sign-in summary) → **Q5** (OfficeActivity) → **Q3d** (IP breakdown) → **Q1** (priority IPs for enrichment)
 - **Password spray target** (TP Q4): **Q3c** (sign-in failures) → **Q3d** (IPs hitting this user) → **Q6** (related incidents)
 - **Post-incident user timeline** (TP Q1, incident follow-up): **Q4** (audit logs) → **Q5** (O365 activity) → **Q10** (DLP events) → **Q6** (all incidents)
 - **IP enrichment for user** (TP Q3+Q4): **Q1** (priority IP extraction) → **Q11** (TI matches) → `enrich_ips.py`
+- **UEBA behavioral context** (TP Q3, portal UEBA anomalies): **Q12** (Anomalies table) → **Q6** (related incidents) → **Q4** (audit trail)
 
 ---
 
@@ -258,6 +259,7 @@ When a user requests a security investigation:
 #### Batch 1: Sentinel Queries (Run ALL in parallel)
 - IP selection query (Query 1) - Returns up to 15 prioritized IPs
 - Anomalies query (Query 2)
+- UEBA anomaly summary (Query 12) - Sentinel Anomalies table: scored behavioral detections
 - Sign-in by application (Query 3)
 - Sign-in by location (Query 3b)
 - Sign-in failures (Query 3c)
@@ -775,6 +777,56 @@ ThreatIntelIndicators
     IsActive
 | order by Confidence desc, TimeGenerated desc
 ```
+
+### 12. UEBA Anomaly Summary (Sentinel Anomalies Table)
+
+**Purpose:** Retrieves scored behavioral anomaly detections from Sentinel's built-in UEBA anomaly rules. Aggregates by anomaly type — collapses high-volume rows (e.g., 50 "Anomalous Role Assignment" events) into a single summary row per template. Extracts only the anomalous flags (`IsAnomalous == true`) and flattens MITRE arrays. Score range: 0.0–1.0 (≥0.7 = High, 0.3–0.7 = Medium, <0.3 = Low).
+
+**Data source:** The `Anomalies` table is the KQL source behind the portal's "UEBA anomalies" section. It is distinct from `BehaviorInfo` (MCAS, AH-only) and `BehaviorAnalytics` (raw UEBA events, Data Lake-only). Available in **both** Advanced Hunting and Data Lake.
+
+**Tool:** `RunAdvancedHuntingQuery` (default) or `mcp_sentinel-data_query_lake` (>30d fallback)
+
+**⚠️ TI False Positive:** `DeviceInsights.ThreatIntelIndicatorType` frequently shows `BruteForce` on corporate/Azure egress IPs (TITAN dynamic reputation). Weight the `Score` and `AnomalyFlags` over the TI match — a 0.2-score anomaly with a BruteForce TI hit on a known corporate IP is noise.
+
+```kql
+let targetUPN = '<UPN>';
+let lookback = 30d;
+Anomalies
+| where TimeGenerated > ago(lookback)
+| where UserPrincipalName =~ targetUPN
+| extend TI_Type = tostring(DeviceInsights.ThreatIntelIndicatorType)
+| mv-apply reason = AnomalyReasons on (
+    where tobool(reason.IsAnomalous) == true
+    | project FlagName = tostring(reason.Name))
+| summarize
+    Occurrences = dcount(Id),
+    MaxScore = max(Score),
+    AvgScore = round(avg(Score), 2),
+    Tactics = make_set(parse_json(Tactics)),
+    Techniques = make_set(parse_json(Techniques)),
+    SourceIPs = make_set(SourceIpAddress, 5),
+    AnomalyFlags = make_set(FlagName),
+    TI_Flags = make_set_if(TI_Type, isnotempty(TI_Type)),
+    FirstSeen = min(StartTime),
+    LastSeen = max(EndTime),
+    SampleDescription = take_any(Description)
+    by AnomalyTemplateName
+| mv-apply t = Tactics to typeof(string) on (summarize Tactics = make_set(t))
+| mv-apply t = Techniques to typeof(string) on (summarize Techniques = make_set(t))
+| extend Tactics = set_difference(Tactics, dynamic([""]))
+| extend Techniques = set_difference(Techniques, dynamic([""]))
+| order by MaxScore desc, Occurrences desc
+```
+
+**Output columns:** `AnomalyTemplateName`, `Occurrences` (unique anomaly IDs), `MaxScore`, `AvgScore`, `Tactics`, `Techniques`, `SourceIPs`, `AnomalyFlags` (flat set of anomalous reasons), `TI_Flags`, `FirstSeen`, `LastSeen`, `SampleDescription` (one example description for context).
+
+**Verdict guidance:**
+- 🔴 **Escalate:** MaxScore ≥ 0.7 with multiple occurrences, or anomaly type involves credential access / account manipulation
+- 🟠 **Investigate:** MaxScore ≥ 0.3, or flags include `CountryUncommonlyConnectedFromByUser` combined with `ActionUncommonlyPerformedByUser`
+- 🟡 **Monitor:** Low scores (<0.3) with explainable flags (e.g., first-time admin operations, CTF/lab accounts in target entities)
+- ✅ **Clear:** 0 results — no UEBA anomalies detected
+
+**Zero results note:** Unlike Q2 (custom `Signinlogs_Anomalies_KQL_CL`), Q12 queries the built-in Sentinel UEBA `Anomalies` table. Zero results means no built-in anomaly rules fired — not that UEBA is disabled. If UEBA is not enabled in the workspace, the table may not exist (handle gracefully).
 
 ---
 

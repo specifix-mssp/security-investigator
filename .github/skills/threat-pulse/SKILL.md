@@ -987,6 +987,9 @@ CloudAppEvents
 // Extract client context for Exchange data access events
 | extend ParsedData = parse_json(RawEventData)
 | extend ClientInfo = tostring(ParsedData.ClientInfoString)
+// Filter out Exchange Online system-level REST operations (first-party backend mail flow/compliance)
+// RESTSystem = Microsoft internal service identity; Client=REST without System = user/app API access
+| where not(ActionType in ("MailItemsAccessed", "Send") and ClientInfo has "RESTSystem")
 | extend Category = case(
     ActionType == "MailItemsAccessed" and ClientInfo has "Client=REST", "Mailbox Read (API)",
     ActionType == "Send" and ClientInfo has "Client=REST", "Mail Send (API)",
@@ -1434,6 +1437,7 @@ Prioritize by risk level and actionability. Group by theme (e.g., Identity, Endp
 | Q7 capped at `ago(30d)` | AH Graph API limit. Use `queries/endpoint/rare_process_chains.md` via Data Lake for 90d |
 | Q6 drift scores | Computed in-query — do NOT recompute LLM-side |
 | Q9 drill-down: CloudAppEvents identity filtering | `AccountId` and `AccountObjectId` are **Entra ObjectId GUIDs**, NOT UPNs. Filtering by UPN returns 0 results silently. Use `AccountDisplayName` for display-name matching, or resolve UPN→ObjectId via Graph API first. NEVER use `tostring(RawEventData) has "UPN"` — it causes query cancellation on this high-volume table |
+| Q9: `RESTSystem` false positives | Exchange Online first-party backend services use `Client=RESTSystem` in `ClientInfoString` and appear as **AppId GUIDs** in `AccountDisplayName`. These are NOT user/app API access — they are system-level mail flow, compliance scanning, or connector ingestion. Q9 filters these out; if investigating Q9 results and see GUID actors with `RESTSystem`, they are benign Microsoft internal operations |
 
 > **Schema pitfalls** (column names, dynamic fields, `parse_json` patterns) are covered in `copilot-instructions.md` Known Table Pitfalls. Refer there for `SecurityAlert.Status`, `ExposureGraphNodes.NodeProperties`, timestamp columns, and `AuditLogs.InitiatedBy`.
 
