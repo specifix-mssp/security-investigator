@@ -14,7 +14,7 @@ The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the
 | Domain | Key Questions Answered |
 |--------|----------------------|
 | 🔴 **Incidents** | What high-severity incidents are open and unresolved? How old are they? Who owns them? What was recently resolved — TP rate, MITRE tactics, severity distribution? |
-| 🔐 **Identity (Human)** | Which users are flagged as risky by Identity Protection? What risk events (sign-in-level and user-level AI signals) are driving the risk? Are there password spray / brute-force patterns? |
+| 🔐 **Identity (Human)** | Which users have the highest Defender XDR Risk Score (0-100)? Which are flagged by Identity Protection (RiskLevel/RiskStatus)? What risk events are driving the signals? Are there password spray / brute-force patterns? |
 | 🤖 **Identity (NonHuman)** | Which service principals expanded their resource/IP/location footprint? |
 | 💻 **Endpoint** | Which endpoints deviated most from their process behavioral baseline? What singleton process chains exist? |
 | 📧 **Email Threats** | What's the phishing/spam/malware breakdown? Were any phishing emails delivered? |
