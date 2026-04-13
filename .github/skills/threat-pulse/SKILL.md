@@ -349,7 +349,7 @@ Never omit this warning. It must appear below EVERY `🎬 Take Action` heading, 
 | **1 entity** (user, device, IP, domain, hash) | Direct Defender XDR portal link (see [Portal Links](#defender-xdr-portal-links--all-entity-types) table for URL patterns) |
 | **2+ emails** | AH query with `NetworkMessageId in (...)` → Take actions |
 | **2+ devices** | AH query with `DeviceName in~ (...)` → Take actions |
-| **2+ IPs/domains/hashes** | AH query or Add Indicator (click value in AH results) |
+| **2+ IPs/domains/hashes** | AH query → click value in results → Add Indicator (allow/warn/block) |
 
 **⛔ PROHIBITED:** Generating an AH query for a single entity when a direct portal link would suffice. AH Take Action is for **bulk remediation** — for a single entity, link directly to the portal page where the analyst can act.
 
@@ -366,7 +366,7 @@ Never omit this warning. It must appear below EVERY `🎬 Take Action` heading, 
 | **📧 Email** | `NetworkMessageId`, `RecipientEmailAddress` | Soft/hard delete, move to folder, submit to Microsoft, initiate investigation | **Do NOT use `project`** — *Submit to Microsoft* and *Initiate Automated Investigation* require undocumented columns that `project` strips, silently greying out those options. The portal's *Show empty columns* toggle only works when columns exist in the result schema. Return all columns; use `where` to scope results. |
 | **💻 Device** | `DeviceId` | Isolate, collect investigation package, AV scan, initiate investigation, restrict app execution | Use `summarize arg_max(Timestamp, *) by DeviceId` for latest state |
 | **📁 File** | `SHA1` or `SHA256` + `DeviceId` | Quarantine file | Both hash and device required |
-| **🔗 Indicator** | IP, URL/domain, or SHA hash column | Add indicator: allow, warn, or block | No *Take actions* button needed — click the value directly in AH results → *Add indicator* to create a Defender for Endpoint custom indicator |
+| **🔗 Indicator** | IP, URL/domain, or SHA hash column | Add indicator: allow, warn, or block | **An AH query is still required** to surface the values as clickable — there is no *Take actions* dropdown button. Instead, click any IP/URL/hash value directly in the AH results → *Add indicator* to create a Defender for Endpoint custom indicator |
 | **🔐 Identity** | *(No AH Take Action)* | Confirm compromised, revoke sessions, suspend in app | **Single user:** Direct Defender XDR Identity page link. **Never** generate an AH query for identity remediation |
 
 #### Template Queries
@@ -413,6 +413,30 @@ DeviceFileEvents
 | project DeviceId, DeviceName, SHA1, SHA256, FileName, FolderPath
 ```
 → *Take actions →* Quarantine file
+
+**🔗 Bulk Indicators (2+ IPs/domains/hashes) — AH query for Add Indicator:**
+
+When blocking multiple IPs, domains, or hashes, provide an AH query that surfaces the values as clickable columns. There is no *Take actions* dropdown — the analyst clicks each value directly in results → *Add indicator*.
+
+```kql
+// Surface attacker IPs as clickable values for Add Indicator
+DeviceNetworkEvents
+| where Timestamp > ago(7d)
+| where RemoteIP in ("<ip1>", "<ip2>", "<ip3>")
+| summarize Connections = count(), Ports = make_set(LocalPort) by RemoteIP
+| order by Connections desc
+```
+→ Click any `RemoteIP` value in results → *Add indicator* → Block and remediate
+
+**Variant — domains/URLs:**
+```kql
+DeviceNetworkEvents
+| where Timestamp > ago(7d)
+| where RemoteUrl has_any ("<domain1>", "<domain2>")
+| summarize Connections = count() by RemoteUrl
+| order by Connections desc
+```
+→ Click any `RemoteUrl` value → *Add indicator* → Block and remediate
 
 #### Defender XDR Portal Links — All Entity Types
 
@@ -479,6 +503,8 @@ DeviceFileEvents
 | Bulk entities (2+ emails, devices, indicators): AH query with Take actions | ✅ **REQUIRED** |
 | Every `🎬 Take Action` heading followed by the warning: `> ⚠️ **AI-generated content may be incorrect. Always review Take Action queries and portal links for accuracy before executing remediation actions.**` | ✅ **REQUIRED** |
 | Rendering a `🎬 Take Action` section without the AI-generated content warning immediately below the heading | ❌ **PROHIBITED** |
+| Bulk indicator (2+ IPs/domains/hashes) Take Action block includes AH query that surfaces values as clickable columns | ✅ **REQUIRED** |
+| Describing "Add indicator" action without providing the AH query that surfaces the values in results | ❌ **PROHIBITED** |
 
 ---
 
