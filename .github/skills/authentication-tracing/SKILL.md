@@ -153,14 +153,42 @@ When investigating anomalous sign-ins (e.g., from new countries, IPs, or devices
 
 **Scenario:** Anomalous sign-ins detected from new IP/location. Determine if user performed fresh MFA or reused token.
 
+### Tool Selection: AH-First, Data Lake Fallback
+
+| Lookback | Tool | Table | Why |
+|----------|------|-------|-----|
+| **≤ 30 days** (default) | `RunAdvancedHuntingQuery` | `EntraIdSignInEvents` | Single table covers interactive + non-interactive. No union needed. Direct columns for Country, City, Browser, UserAgent. Free on Analytics tier. |
+| **> 30 days** | `mcp_sentinel-data_query_lake` | `union SigninLogs, AADNonInteractiveUserSignInLogs` | AH Graph API caps at 30d. Data Lake retains 90d+. See [Data Lake Fallback Queries](#data-lake-fallback-queries--30d) below. |
+
+**Column mapping — `EntraIdSignInEvents` vs `SigninLogs`:**
+
+| EntraIdSignInEvents (AH) | SigninLogs (Data Lake) | Notes |
+|--------------------------|----------------------|-------|
+| `Timestamp` | `TimeGenerated` | |
+| `AccountUpn` | `UserPrincipalName` | |
+| `Application` | `AppDisplayName` | |
+| `ErrorCode` (int) | `ResultType` (string) | AH: `ErrorCode == 0`, DL: `ResultType == "0"` |
+| `Country`, `City` (direct strings) | `Location` or `parse_json(LocationDetails)` | No parsing needed in AH |
+| `LogonType` (JSON array) | Separate tables (SigninLogs vs AADNonInteractive) | AH: `has "interactiveUser"`, DL: check which table |
+| `AuthenticationRequirement` | `AuthenticationRequirement` | Same values: `singleFactorAuthentication`, `multiFactorAuthentication` |
+| `UserAgent`, `Browser`, `OSPlatform` | `parse_json(DeviceDetail)` | Direct columns in AH |
+| `UniqueTokenId` | *(not available)* | AH-only — token-level forensics |
+| `SessionId` | `SessionId` | Same |
+| *(not available)* | `AuthenticationDetails` (JSON array) | DL-only — per-step `RequestSequence` + `authenticationMethod` |
+
+> **Key trade-off:** `AuthenticationDetails` (Data Lake only) provides per-step `RequestSequence` and `authenticationMethod` ("Password", "Previously satisfied", "Mobile app notification"). `EntraIdSignInEvents` replaces this with row-level `LogonType` (interactive vs non-interactive) + `AuthenticationRequirement` (singleFactor/multiFactor) + `UniqueTokenId`. Both achieve the same forensic goal — determining interactive MFA vs token reuse — through different signals.
+
+**⚠️ Table name casing:** Capital `I` in `SignIn` — `EntraIdSignInEvents`, NOT `EntraIdSigninEvents`.
+
+**⚠️ `LogonType` is a JSON array string** (e.g., `["interactiveUser"]`). Use `has` for filtering, NOT `==`.
+
 **CRITICAL: START WITH SessionId - This is Your Primary and Most Efficient Investigation Pattern:**
 
 1. **Query suspicious IP(s) to get SessionId** (single query for all suspicious IPs)
-2. **Query SessionId for interactive MFA** - Expand date range progressively:
-   - **First attempt:** Investigation window (same as anomaly detection query)
-   - **If no results:** Expand to 7 days before suspicious activity
-   - **If still no results:** Expand to 90 days before suspicious activity
-   - Tokens can be valid for up to 90 days depending on tenant policy
+2. **Query SessionId for complete chain** — interactive vs non-interactive classification, geographic progression, token tracking
+3. **Find interactive sign-ins** to determine where the user (or attacker) authenticated interactively
+   - Expand date range progressively if needed: investigation window → 7 days → 30 days (AH limit)
+   - **If > 30d lookback required:** Switch to Data Lake fallback queries (90d retention)
 
 **AVOID chronological searching without SessionId** - it requires multiple queries and is less efficient.
 
@@ -168,23 +196,21 @@ When investigating anomalous sign-ins (e.g., from new countries, IPs, or devices
 
 ### Step 1: Get SessionId from Suspicious Authentication (ALWAYS START HERE)
 
+**Tool:** `RunAdvancedHuntingQuery`
+
 **This single query gives you SessionId AND enough context to determine next steps:**
 
 ```kql
 let suspicious_ips = dynamic(["<IP_1>", "<IP_2>"]);  // All suspicious IPs
-let start = datetime(<INVESTIGATION_START_DATE>);
-let end = datetime(<INVESTIGATION_END_DATE>);
-union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs
-| where TimeGenerated between (start .. end)
-| where UserPrincipalName =~ '<UPN>'
+EntraIdSignInEvents
+| where Timestamp > ago(30d)
+| where AccountUpn =~ '<UPN>'
 | where IPAddress in (suspicious_ips)
-| project TimeGenerated, IPAddress, Location, AppDisplayName, 
-    SessionId = tostring(SessionId),
-    UserAgent,
-    ResultType,
-    CorrelationId
-| order by TimeGenerated asc
-| take 20
+| project Timestamp, IPAddress, Country, City, Application,
+    SessionId, LogonType, AuthenticationRequirement,
+    UserAgent, Browser, OSPlatform, ErrorCode, UniqueTokenId
+| order by Timestamp asc
+| take 50
 ```
 
 **What This Returns:**
@@ -202,33 +228,29 @@ union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs
 
 ### Step 2: Trace Complete Authentication Chain by SessionId (DEFINITIVE PROOF)
 
+**Tool:** `RunAdvancedHuntingQuery`
+
 **Once you have SessionId from Step 1, query ALL authentications in that session:**
 
 ```kql
 let target_session_id = "<SESSION_ID_FROM_STEP_1>";
-let start = datetime(<INVESTIGATION_START_DATE>);
-let end = datetime(<INVESTIGATION_END_DATE>);
-union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs
-| where TimeGenerated between (start .. end)
-| where UserPrincipalName =~ '<UPN>'
+EntraIdSignInEvents
+| where Timestamp > ago(30d)
+| where AccountUpn =~ '<UPN>'
 | where SessionId == target_session_id
-| extend AuthDetails = parse_json(AuthenticationDetails)
-| mv-expand AuthDetails
-| extend AuthMethod = tostring(AuthDetails.authenticationMethod)
-| extend AuthStepDateTime = todatetime(AuthDetails.authenticationStepDateTime)
-| extend RequestSeq = toint(AuthDetails.RequestSequence)
-| project TimeGenerated, IPAddress, Location, AppDisplayName, 
-    AuthMethod, AuthStepDateTime, RequestSeq,
-    UserAgent, ResultType, SessionId
-| order by TimeGenerated asc
+| project Timestamp, IPAddress, Country, City, Application,
+    LogonType, AuthenticationRequirement, ErrorCode,
+    UserAgent, Browser, OSPlatform, UniqueTokenId
+| order by Timestamp asc
 ```
 
 **This Single Query Reveals:**
 - **Complete geographic progression** (all IPs/locations in chronological order)
-- **Where interactive MFA occurred** (RequestSeq > 0, AuthMethod != "Previously satisfied")
-- **Token reuse pattern** (all subsequent authentications with "Previously satisfied")
-- **Device consistency** (UserAgent should match across all sessions)
+- **Where interactive authentication occurred** (`LogonType has "interactiveUser"` + `AuthenticationRequirement == "multiFactorAuthentication"`)
+- **Token reuse pattern** (`LogonType has "nonInteractiveUser"` — all subsequent events using cached tokens)
+- **Device consistency** (Browser + UserAgent + OSPlatform should match across session)
 - **Time gaps** between locations (assess physical possibility of travel)
+- **Token-level tracking** (`UniqueTokenId` — same token reused across IPs = session continuity)
 
 **Critical Evidence - What SessionId Indicates:**
 - SessionId is a browser session identifier that tracks authentication flows
@@ -239,52 +261,109 @@ union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs
 - **CRITICAL**: Same SessionId does NOT rule out credential/token theft
 
 **Analysis Pattern:**
-1. Look at FIRST authentication in session (earliest TimeGenerated)
-2. Check if RequestSeq > 0 → User performed interactive MFA at that IP/location
-3. All subsequent authentications should show "Previously satisfied" (token reuse)
-4. Verify UserAgent consistency (same = likely same device; different = possible token theft)
-5. Assess geographic progression (impossible travel = high risk; reasonable = needs user confirmation)
+1. Look at FIRST authentication in session (earliest Timestamp)
+2. Check if `LogonType has "interactiveUser"` → User performed interactive authentication at that IP/location
+3. Check `AuthenticationRequirement` → `multiFactorAuthentication` = MFA was required and satisfied; `singleFactorAuthentication` = password-only
+4. Subsequent events with `LogonType has "nonInteractiveUser"` = token reuse (expected OAuth flow)
+5. Verify device consistency (Browser + UserAgent should match across session; different = possible token theft)
+6. Assess geographic progression (impossible travel = high risk; reasonable = needs user confirmation)
+7. Track `UniqueTokenId` — same token ID across geographically distant IPs = session continuity (could be VPN OR stolen token)
 
 ---
 
-### Step 3: Find Interactive MFA with Progressive Date Range Expansion
+### Step 3: Find Interactive Sign-Ins with Progressive Date Range Expansion
 
-**Use this when Step 2 shows all "Previously satisfied" (no interactive MFA in the SessionId)**
+**Tool:** `RunAdvancedHuntingQuery` (≤30d) or Data Lake fallback (>30d)
 
-**Progressive date range strategy:**
-1. Start with investigation window
-2. If no results, expand to 7 days
-3. If still no results, expand to 90 days
+**Use this when Step 2 shows only `nonInteractiveUser` logon types (no interactive auth in the session)**
 
-**Query Pattern (adjust date range as needed):**
+**Query Pattern:**
 
 ```kql
-let suspicious_event_time = datetime(<FIRST_SUSPICIOUS_SIGNIN_TIME>);
-let start = suspicious_event_time - 7d;  // Start with 7 days, then try 90d if no results
-let end = suspicious_event_time;
+EntraIdSignInEvents
+| where Timestamp > ago(30d)
+| where AccountUpn =~ '<UPN>'
+| where LogonType has "interactiveUser"
+| where ErrorCode == 0
+| summarize 
+    SignInCount = count(),
+    Apps = make_set(Application, 5),
+    Countries = make_set(Country, 3),
+    AuthReqs = make_set(AuthenticationRequirement),
+    TokenIds = dcount(UniqueTokenId),
+    FirstSeen = min(Timestamp),
+    LastSeen = max(Timestamp)
+    by IPAddress, SessionId
+| order by LastSeen desc
+| take 20
+```
+
+**What This Returns:**
+- All IPs where the user performed interactive sign-ins, grouped by session
+- `AuthenticationRequirement` per IP — reveals whether MFA was required or bypassed
+- `TokenIds` count — how many distinct tokens were issued from each IP/session pair
+- **Match SessionIds** against Step 1 results — if the suspicious SessionId also has interactive sign-ins from a VPS IP, the attacker has the password
+
+**Progressive expansion (if AH 30d window is insufficient):**
+- If no interactive sign-ins found in 30d → Switch to Data Lake fallback queries for 90d lookback
+- Tokens can be valid for up to 90 days depending on tenant policy
+
+---
+
+### Data Lake Fallback Queries (>30d)
+
+**Use these when the AH 30d window is insufficient — e.g., tracing token origins older than 30 days.**
+
+**Tool:** `mcp_sentinel-data_query_lake` with `workspaceId`
+
+**Step 1 (Data Lake):**
+```kql
+let suspicious_ips = dynamic(["<IP_1>", "<IP_2>"]);
 union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs
-| where TimeGenerated between (start .. end)
+| where TimeGenerated > ago(90d)
 | where UserPrincipalName =~ '<UPN>'
-| extend AuthDetails = parse_json(AuthenticationDetails)
+| where IPAddress in (suspicious_ips)
+| project TimeGenerated, IPAddress, Location, AppDisplayName, 
+    SessionId = tostring(SessionId), UserAgent, ResultType, CorrelationId
+| order by TimeGenerated asc
+| take 50
+```
+
+**Step 2 (Data Lake) — with per-step auth detail:**
+```kql
+let target_session_id = "<SESSION_ID>";
+union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs
+| where TimeGenerated > ago(90d)
+| where UserPrincipalName =~ '<UPN>'
+| where SessionId == target_session_id
+| extend AuthDetails = parse_json(tostring(AuthenticationDetails))
 | mv-expand AuthDetails
 | extend AuthMethod = tostring(AuthDetails.authenticationMethod)
 | extend AuthStepDateTime = todatetime(AuthDetails.authenticationStepDateTime)
 | extend RequestSeq = toint(AuthDetails.RequestSequence)
-| where AuthMethod != "Previously satisfied"
-| where RequestSeq > 0
-| project TimeGenerated, IPAddress, Location, AppDisplayName, AuthMethod, AuthStepDateTime, 
-    RequestSeq, SessionId = tostring(SessionId), CorrelationId, ResultType, UserAgent
-| order by TimeGenerated desc
-| take 20
+| project TimeGenerated, IPAddress, Location, AppDisplayName, 
+    AuthMethod, AuthStepDateTime, RequestSeq, UserAgent, ResultType
+| order by TimeGenerated asc
 ```
 
-**Date Range Progression:**
-- **Attempt 1:** Investigation window (e.g., last 48 hours, 7 days)
-- **Attempt 2:** 7 days before suspicious activity: `suspicious_event_time - 7d`
-- **Attempt 3:** 90 days before suspicious activity: `suspicious_event_time - 90d`
+> **Data Lake advantage:** `AuthenticationDetails` provides granular per-step `RequestSequence` and `authenticationMethod` ("Password", "Previously satisfied", "Mobile app notification") not available in `EntraIdSignInEvents`. Use this for forensic-grade MFA step tracing when AH's `LogonType` + `AuthenticationRequirement` columns are insufficient.
 
-**This returns all interactive MFA sessions in the specified period.**
-**Check if any SessionId matches the suspicious SessionId from Step 1.**
+**Step 3 (Data Lake) — interactive MFA search:**
+```kql
+union isfuzzy=true SigninLogs, AADNonInteractiveUserSignInLogs
+| where TimeGenerated > ago(90d)
+| where UserPrincipalName =~ '<UPN>'
+| extend AuthDetails = parse_json(tostring(AuthenticationDetails))
+| mv-expand AuthDetails
+| extend AuthMethod = tostring(AuthDetails.authenticationMethod)
+| extend RequestSeq = toint(AuthDetails.RequestSequence)
+| where AuthMethod != "Previously satisfied"
+| where RequestSeq > 0
+| project TimeGenerated, IPAddress, Location, AppDisplayName, AuthMethod,
+    RequestSeq, SessionId = tostring(SessionId), UserAgent, ResultType
+| order by TimeGenerated desc
+| take 30
+```
 
 ---
 
@@ -528,14 +607,13 @@ The **same SessionId** requires careful analysis because:
 
 This skill requires:
 
-1. **Microsoft Sentinel MCP** - For KQL queries against SigninLogs and AADNonInteractiveUserSignInLogs
-   - `mcp_sentinel-data_query_lake`: Execute KQL queries
-   - `mcp_sentinel-data_search_tables`: Discover table schemas
+1. **Sentinel Triage MCP** (primary, ≤30d) — `RunAdvancedHuntingQuery` for `EntraIdSignInEvents`
+2. **Microsoft Sentinel Data Lake MCP** (fallback, >30d) — `mcp_sentinel-data_query_lake` for `SigninLogs` + `AADNonInteractiveUserSignInLogs` union
 
 ### Required Data Sources
 
-- **SigninLogs** - Interactive sign-in events
-- **AADNonInteractiveUserSignInLogs** - Non-interactive (token-based) sign-in events
+- **EntraIdSignInEvents** (primary) — Unified interactive + non-interactive sign-in events. Advanced Hunting only, 30d retention via Graph API
+- **SigninLogs** + **AADNonInteractiveUserSignInLogs** (fallback) — Sentinel Data Lake, 90d+ retention. Required when tracing token origins older than 30 days or when `AuthenticationDetails` per-step granularity is needed
 - **Investigation JSON** - Pre-generated investigation file with `ip_enrichment` array (from user-investigation skill)
 
 ### How to Find Investigation JSON
