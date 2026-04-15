@@ -13,7 +13,7 @@ The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the
 
 | Domain | Key Questions Answered |
 |--------|----------------------|
-| 🔴 **Incidents** | What high-severity incidents are open and unresolved? How old are they? Who owns them? What was recently resolved — TP rate, MITRE tactics, severity distribution? |
+| 🔴 **Incidents** | What incidents are open and unresolved? Prioritizes High/Critical, backfills with Medium/Low in smaller environments. How old are they? Who owns them? What was recently resolved — TP rate, MITRE tactics, severity distribution? |
 | 🔐 **Identity (Human)** | Which users have the highest Defender XDR Risk Score (0-100)? Which are flagged by Identity Protection (RiskLevel/RiskStatus)? What risk events are driving the signals? Are there password spray / brute-force patterns? |
 | 🤖 **Identity (NonHuman)** | Which service principals expanded their resource/IP/location footprint? |
 | 💻 **Endpoint** | Which endpoints deviated most from their process behavioral baseline? What singleton process chains exist? |
@@ -105,7 +105,7 @@ Lookback: <N>d (user-selected or default 7d)
 Output: <Inline / Markdown file / Both>
 
 Executing 12 queries across 7 domains:
-  🔴 Incidents      — Open high-severity + 7d closed summary (Q1, Q2)
+  🔴 Incidents      — Open incidents (severity-ranked) + 7d closed summary (Q1, Q2)
   🔐 Identity       — Identity risk posture, risk event enrichment, auth spray (Q3, Q4)
   🤖 NonHuman ID    — Service principal behavioral drift (Q5)
   💻 Endpoint       — Device process drift, rare process chains (Q6, Q7)
@@ -133,7 +133,7 @@ Estimated time: ~2–4 minutes
 
 | Query | Domain | Purpose | Tool |
 |-------|--------|---------|------|
-| Q1 | 🔴 Incidents | Open High/Critical incidents with MITRE tactics | `RunAdvancedHuntingQuery` |
+| Q1 | 🔴 Incidents | Open incidents (severity-ranked backfill) with MITRE tactics | `RunAdvancedHuntingQuery` |
 | Q2 | 🔴 Incidents | 7-day closed incident summary (classification, MITRE, severity) | `RunAdvancedHuntingQuery` |
 | Q3 | 🔐 Identity (Human) | Identity risk posture (IdentityInfo) + risk event enrichment (AADUserRiskEvents) | `RunAdvancedHuntingQuery` |
 | Q4 | 🔐 Identity (Human) | Password spray / brute-force across Entra ID + RDP/SSH | `RunAdvancedHuntingQuery` |
@@ -562,20 +562,21 @@ DeviceNetworkEvents
 
 > **All queries below are verified against live Sentinel/Defender XDR schemas. Use them exactly as written. Lookback periods use `ago(Nd)` — substitute the user's preferred lookback where noted.**
 
-### Query 1: Open High-Severity Incidents with MITRE Techniques & Entities
+### Query 1: Open Incidents with Severity-Ranked Backfill & MITRE Techniques
 
-🔴 **Incident hygiene** — Surfaces unresolved High/Critical incidents with age, owner, alert count, MITRE tactics, MITRE technique IDs, and extracted entity names (accounts + devices) for cross-query correlation.
+🔴 **Incident hygiene** — Surfaces unresolved incidents prioritized by severity (Critical → High → Medium → Low), with age, owner, alert count, MITRE tactics, MITRE technique IDs, and extracted entity names (accounts + devices) for cross-query correlation. In large environments, all 10 slots fill with High/Critical. In smaller environments, Medium/Low backfill remaining slots automatically.
 
 **Tool:** `RunAdvancedHuntingQuery`
 
 ```kql
-let OpenHighSev = SecurityIncident
+let OpenIncidents = SecurityIncident
 | where TimeGenerated > ago(30d)
 | summarize arg_max(TimeGenerated, *) by IncidentNumber
-| where Status in ("New", "Active")
-| where Severity in ("High", "Critical");
-let TotalOpenCount = toscalar(OpenHighSev | count);
-OpenHighSev
+| where Status in ("New", "Active");
+let TotalHighCritical = toscalar(OpenIncidents | where Severity in ("High", "Critical") | count);
+let TotalAll = toscalar(OpenIncidents | count);
+OpenIncidents
+| extend SevRank = case(Severity == "Critical", 0, Severity == "High", 1, Severity == "Medium", 2, Severity == "Low", 3, 4)
 | extend ParsedLabels = parse_json(Labels)
 | mv-apply Label = ParsedLabels on (
     summarize Tags = make_set(tostring(Label.labelName), 5)
@@ -611,7 +612,7 @@ OpenHighSev
     Accounts = make_set(AccountUPN, 5),
     Devices = make_set(HostName, 5),
     Tags = take_any(Tags)
-    by ProviderIncidentId, Title, Severity, Status, CreatedTime,
+    by ProviderIncidentId, Title, Severity, SevRank, Status, CreatedTime,
        OwnerUPN = tostring(Owner.userPrincipalName)
 | extend Techniques = set_difference(Techniques, dynamic([""]))
 | extend Tactics = set_difference(Tactics, dynamic([""]))
@@ -622,16 +623,16 @@ OpenHighSev
     datetime_diff('hour', now(), CreatedTime) < 24, strcat(datetime_diff('hour', now(), CreatedTime), "h ago"),
     strcat(datetime_diff('day', now(), CreatedTime), "d ago"))
 | extend PortalUrl = strcat("https://security.microsoft.com/incidents/", ProviderIncidentId)
-| extend TotalOpenCount = TotalOpenCount
-| project TotalOpenCount, ProviderIncidentId, Title, Severity, AgeDisplay, AlertCount, 
+| extend TotalHighCritical = TotalHighCritical, TotalAll = TotalAll
+| project TotalHighCritical, TotalAll, ProviderIncidentId, Title, Severity, SevRank, AgeDisplay, AlertCount, 
     OwnerUPN, Tactics, Techniques, Accounts, Devices, Tags, PortalUrl, AlertNames, CreatedTime
-| order by bin(CreatedTime, 1d) desc, AlertCount desc
+| order by SevRank asc, bin(CreatedTime, 1d) desc, AlertCount desc
 | take 10
 ```
 
-**Purpose:** Identifies the top 10 newest open high-severity incidents, sorted by day (newest first) then by alert count (highest complexity first within each day). Returns `TotalOpenCount` on every row so the report can indicate "Showing 10 of N" when more exist. Joins SecurityAlert for MITRE tactic and technique ID visibility, plus extracts `Accounts` (UPNs or AAD ObjectIds) and `Devices` (hostnames) from alert entities for cross-query correlation with Q3 (identity risk), Q6/Q7 (endpoint drift/rare processes), Q4 (spray targets), and Q12 (CVE exposure). Extracts `Tags` from incident labels (both AutoAssigned ML classifications like `Credential Phish`, `BEC Fraud`, `Defender Experts` and User-applied SOC workflow tags). Flags unassigned incidents (empty OwnerUPN).
+**Purpose:** Identifies the top 10 open incidents using severity-ranked backfill — Critical and High incidents always surface first, with Medium and Low filling remaining slots when fewer than 10 High/Critical exist. This ensures the query is useful in both large environments (1,000+ High incidents) and small environments (a handful of Medium/Low). Returns `TotalHighCritical` and `TotalAll` on every row so the report header adapts: "Showing 10 of {TotalAll} open incidents ({TotalHighCritical} High/Critical)". Joins SecurityAlert for MITRE tactic and technique ID visibility, plus extracts `Accounts` (UPNs or AAD ObjectIds) and `Devices` (hostnames) from alert entities for cross-query correlation with Q3 (identity risk), Q6/Q7 (endpoint drift/rare processes), Q4 (spray targets), and Q12 (CVE exposure). Extracts `Tags` from incident labels (both AutoAssigned ML classifications like `Credential Phish`, `BEC Fraud`, `Defender Experts` and User-applied SOC workflow tags). Flags unassigned incidents (empty OwnerUPN).
 
-**Sort logic:** `bin(CreatedTime, 1d) desc, AlertCount desc` — groups incidents by calendar day (newest day first), then ranks by correlated alert count within each day. This ensures the most complex recent incidents surface first, while older backlog naturally drops off.
+**Sort logic:** `SevRank asc, bin(CreatedTime, 1d) desc, AlertCount desc` — severity first (Critical=0, High=1, Medium=2, Low=3), then by calendar day (newest first within each severity tier), then by alert count (most complex first within each day). In large environments, all 10 slots are High/Critical and behavior is identical to the previous query. In small environments, the severity column makes the backfill visible.
 
 **Entity extraction rules:**
 - **Accounts:** Prefers `Name@UPNSuffix` (lowercased); falls back to `AadUserId` (GUID) when no UPN suffix. Service accounts without domains naturally drop.
@@ -639,13 +640,13 @@ OpenHighSev
 - **Tags:** Extracted from `Labels` (dynamic array of `{labelName, labelType}` objects). Includes both `AutoAssigned` (Defender ML) and `User` (SOC analyst/automation rule) tags.
 - Accounts, Devices, and Tags each capped at 5 per incident to limit output size.
 
-**Output columns:** `TotalOpenCount` (total open High/Critical incidents — used for "Showing 10 of N" header, not rendered as a table column), `ProviderIncidentId` (linked via `PortalUrl`), `Title`, `Severity`, `AgeDisplay` (relative time: "3m ago", "2h ago", "1d ago"), `AlertCount`, `OwnerUPN`, `Tactics`, `Techniques`, `Accounts`, `Devices`, `Tags`. `AlertNames` and `CreatedTime` are projected for LLM context but not rendered as table columns.
+**Output columns:** `TotalHighCritical` (count of open High/Critical incidents), `TotalAll` (count of all open incidents) — both used for the adaptive "Showing 10 of N" header, not rendered as table columns. `ProviderIncidentId` (linked via `PortalUrl`), `Title`, `Severity`, `SevRank` (sort key, not rendered), `AgeDisplay` (relative time: "3m ago", "2h ago", "1d ago"), `AlertCount`, `OwnerUPN`, `Tactics`, `Techniques`, `Accounts`, `Devices`, `Tags`. `AlertNames` and `CreatedTime` are projected for LLM context but not rendered as table columns.
 
 **Verdict logic:**
-- 🔴 Escalate: 5+ new High/Critical incidents in 24h, or any incident with `AlertCount > 50`, or any unassigned incident with CredentialAccess/LateralMovement tactics
-- 🟠 Investigate: Any unassigned incident, or `AlertCount > 10`, or multiple incidents in <6h
-- 🟡 Monitor: Open incidents exist but are assigned and low alert count
-- ✅ Clear: 0 open High/Critical incidents (Q2 closed summary still renders as context)
+- 🔴 Escalate: 5+ new High/Critical incidents in 24h, or any incident with `AlertCount > 50`, or any unassigned High/Critical incident with CredentialAccess/LateralMovement tactics
+- 🟠 Investigate: Any unassigned High/Critical incident, or `AlertCount > 10`, or multiple High/Critical incidents in <6h
+- 🟡 Monitor: Only Medium/Low incidents exist (no High/Critical), or High/Critical incidents exist but are assigned and low alert count
+- ✅ Clear: 0 open incidents of any severity (Q2 closed summary still renders as context)
 
 ---
 
@@ -1373,7 +1374,7 @@ Insert `📂 Recommended Query Files` section after **Recommended Actions** in t
 5. **🎯 Recommended Actions:** Prioritized table with action, trigger query, and drill-down skill.
 6. **📂 Recommended Query Files:** Per the Report Output Block procedure above. For 🟡-only verdicts, use "📂 Proactive Hunting Suggestions" header instead. Omit entirely when all ✅.
 
-**Q1 column format:** `| Incident | Title | Age | Alerts | Owner | Tactics | Accounts | Devices | Tags |` — Unassigned shows `⚠️ Unassigned`. `Age` uses relative time from `AgeDisplay` (e.g., "3m ago", "2h ago", "1d ago"). `Accounts`, `Devices`, and `Tags` are entity/label arrays (max 5 each) — render inline as comma-separated values. When `TotalOpenCount > 10`, prepend text: "**Showing 10 of {TotalOpenCount} open High/Critical incidents** (sorted by newest, most complex first)". When `TotalOpenCount <= 10`, omit the note.
+**Q1 column format:** `| Incident | Sev | Title | Age | Alerts | Owner | Tactics | Accounts | Devices | Tags |` — `Sev` column shows the incident severity (Critical/High/Medium/Low). Unassigned shows `⚠️ Unassigned`. `Age` uses relative time from `AgeDisplay` (e.g., "3m ago", "2h ago", "1d ago"). `Accounts`, `Devices`, and `Tags` are entity/label arrays (max 5 each) — render inline as comma-separated values. When `TotalAll > 10`, prepend text: "**Showing 10 of {TotalAll} open incidents ({TotalHighCritical} High/Critical)** (sorted by severity, then newest, most complex first)". When `TotalAll <= 10`, omit the note. When `TotalHighCritical == 0`, prepend: "**No High/Critical incidents — showing top Medium/Low from {TotalAll} open**".
 
 **Q2 closed summary:** Classification breakdown table + severity + MITRE tactics/techniques from TP closures. Always render even when Q1 is ✅.
 
