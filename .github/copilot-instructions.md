@@ -737,14 +737,20 @@ python enrich_ips.py --file temp/investigation_user_20251130.json
 
 ### AH Deep Links — Clickable "Run in Portal" URLs (`kql_to_ah_url.py`)
 
-Every AH query in a `🎬 Take Action` block MUST include a clickable deep link that opens the query directly in the Defender XDR Advanced Hunting editor.
+Every AH query in a `🎬 Take Action` block MUST include **both**:
+1. The KQL in a **copyable fenced code block** (` ```kql ... ``` `) — so the analyst can paste it manually if the deep link fails
+2. A **clickable deep link** immediately after the code block — for one-click convenience
 
-**Generation:** `python scripts/kql_to_ah_url.py "<KQL>"` (or `--md` for markdown link, `--file` for .kql files). For multi-line KQL or queries with internal quotes, write to a temp file first: `Set-Content temp/q.kql "<KQL>"; python scripts/kql_to_ah_url.py --file temp/q.kql`. Place the output link immediately after the KQL code block: `[Run in Advanced Hunting](<url>)`.
+The deep link is a convenience shortcut, NOT a replacement for the code block. If the link breaks (encoding issues, session state, browser quirks), the analyst needs the raw KQL.
+
+**⚠️ PowerShell here-string pitfall:** Double-quoted here-strings (`@"..."@`) expand `$variables` and can silently corrupt KQL containing `$` (common in KQL `let` statements). **Always use single-quoted here-strings (`@'...'@`)** when writing KQL to temp files.
 
 | Action | Status |
 |--------|--------|
+| AH query in Take Action without a copyable KQL code block | ❌ **PROHIBITED** |
 | AH query in Take Action without a `Run in Advanced Hunting` deep link | ❌ **PROHIBITED** |
-| Every AH query in Take Action includes a clickable deep link | ✅ **REQUIRED** |
+| Every AH query in Take Action includes BOTH a code block AND a clickable deep link | ✅ **REQUIRED** |
+| Using double-quoted here-strings (`@"..."@`) when writing KQL to temp files for deep link generation | ❌ **PROHIBITED** |
 
 ---
 
