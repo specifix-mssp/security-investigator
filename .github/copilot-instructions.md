@@ -401,6 +401,7 @@ Incident investigation and threat hunting tools for Defender XDR and Sentinel:
 - **Incident Management**: List/get incidents (`ListIncidents`, `GetIncidentById`), list/get alerts (`ListAlerts`, `GetAlertByID`)
   - **⚠️ `ListAlerts` limitation:** This tool has NO `incidentId` parameter. It only supports `createdAfter`, `createdBefore`, `severity`, `status`, `skip`, `top`. Calling it returns **all tenant alerts** up to the page size — any unsupported parameter is silently ignored. **To get alerts for a specific incident**, use `GetIncidentById` with `includeAlertsData=true`, or query `AlertInfo`/`AlertEvidence` via `RunAdvancedHuntingQuery` with entity-based filtering.
 - **Advanced Hunting**: Run KQL queries across Defender XDR tables and connected Log Analytics workspace tables (`RunAdvancedHuntingQuery`), fetch table schemas (`FetchAdvancedHuntingTablesOverview`, `FetchAdvancedHuntingTablesDetailedSchema`)
+  - **⚠️ Parameter name:** Use `kqlQuery`, NOT `query` (see Troubleshooting Guide).
 - **Entity Investigation**: File info/stats/alerts (`GetDefenderFileInfo`, `GetDefenderFileStatistics`, `GetDefenderFileAlerts`), device details (`GetDefenderMachine`, `GetDefenderMachineAlerts`, `GetDefenderMachineLoggedOnUsers`), IP analysis (`GetDefenderIpAlerts`, `GetDefenderIpStatistics`), user activity (`ListUserRelatedAlerts`, `ListUserRelatedMachines`)
 - **Vulnerability Management**: List affected devices (`ListDefenderMachinesByVulnerability`), software vulnerabilities (`ListDefenderVulnerabilitiesBySoftware`)
 - **Remediation**: List/get remediation tasks (`ListDefenderRemediationActivities`, `GetDefenderRemediationActivity`)
@@ -815,6 +816,7 @@ Active PIM Role Assignments (Z):
 |-------|----------|
 | **Graph API returns 404 for entity** | Verify UPN/ID is correct; check if entity exists with different identifier |
 | **Sentinel query timeout** | Reduce date range or add `| take 100` to limit results |
+| **`RunAdvancedHuntingQuery` returns "An error occurred invoking"** | Wrong parameter name — use **`kqlQuery`**, NOT `query`. This is the #1 silent failure mode for AH calls. |
 | **KQL syntax error** | Validate query with `validate_kql_query` tool before execution |
 | **SemanticError: Failed to resolve column** | Field doesn't exist in table schema - use `get_table_schema` to check valid columns |
 | **SemanticError: Failed to resolve table** | Table not in Data Lake - try `RunAdvancedHuntingQuery` instead |
