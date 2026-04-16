@@ -4,7 +4,7 @@
 # Slim version: title, path, domains, mitre, prompt only.
 # Use --full flag to generate the verbose manifest with tables, keywords, platform, timeframe.
 
-generated: '2026-04-16T15:31:08Z'
+generated: '2026-04-16T17:41:49Z'
 valid_domains:
 - admin
 - cloud
@@ -211,6 +211,30 @@ queries:
   - TA0001
   - TA0006
   - TA0008
+- title: Graph API Security Monitoring — Threat Detection & Abuse Hunting
+  path: queries/cloud/graph_api_security_monitoring.md
+  domains:
+  - admin
+  - cloud
+  - spn
+  - identity
+  mitre:
+  - T1087.003
+  - T1069.003
+  - T1098.001
+  - T1098.003
+  - T1078.004
+  - T1550.001
+  - T1114.002
+  - T1119
+  - T1530
+  - T1071.001
+  - T1059.009
+  - TA0007
+  - TA0003
+  - TA0006
+  - TA0009
+  - TA0010
 - title: Key Vault & Storage Account Access Monitoring
   path: queries/cloud/keyvault_storage_access_monitoring.md
   domains:
