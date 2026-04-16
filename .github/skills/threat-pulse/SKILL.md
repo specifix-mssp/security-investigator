@@ -29,7 +29,7 @@ The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the
 
 | Label | URL |
 |-------|-----|
-| `XDR_INCIDENT_BASE` | `https://security.microsoft.com/incidents/` |
+| `XDR_INCIDENT_BASE` | `https://security.microsoft.com/incidents/{ProviderIncidentId}?tid=<tenant_id>` |
 | `DOCS_SECURITY_INCIDENT` | `https://learn.microsoft.com/en-us/azure/sentinel/data-source-schema-reference#securityincident` |
 | `DOCS_ADVANCED_HUNTING` | `https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-overview` |
 | `DOCS_IDENTITY_PROTECTION` | `https://learn.microsoft.com/en-us/entra/id-protection/overview-identity-protection` |
@@ -37,10 +37,12 @@ The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the
 | `DOCS_TVM` | `https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-devicetvmsoftwarevulnerabilities-table` |
 | `DOCS_EMAIL_EVENTS` | `https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-emailevents-table` |
 | `DOCS_CLOUD_APP_EVENTS` | `https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-cloudappevents-table` |
-| `XDR_NHI_INVENTORY` | `https://security.microsoft.com/identity-inventory?tab=NonHumanIdentities` |
+| `XDR_NHI_INVENTORY` | `https://security.microsoft.com/identity-inventory?tab=NonHumanIdentities&tid=<tenant_id>` |
 | `DOCS_NHI_INVESTIGATION` | `https://learn.microsoft.com/en-us/defender-xdr/investigate-non-human-identities` |
 
-Incidents: `XDR_INCIDENT_BASE` + `ProviderIncidentId`.
+Incidents: `XDR_INCIDENT_BASE` + `ProviderIncidentId` + `?tid=<tenant_id>`.
+
+Append `tid=<tenant_id>` (from `config.json`) to ALL `security.microsoft.com` URLs — use `?tid=` or `&tid=` depending on existing query params. Omit if `tenant_id` is not configured. For KQL `strcat()` URLs, substitute the value at query time.
 
 ---
 
@@ -74,7 +76,7 @@ Incidents: `XDR_INCIDENT_BASE` + `ProviderIncidentId`.
 
 6. **Cross-query correlation** — After all queries complete, check for correlated findings per the [Cross-Query Correlation](#cross-query-correlation) table in Post-Processing. Escalate priority when patterns match.
 
-7. **SecurityIncident output rule** — Every incident MUST include a clickable Defender XDR portal URL: `https://security.microsoft.com/incidents/{ProviderIncidentId}`.
+7. **SecurityIncident output rule** — Every incident MUST include a clickable Defender XDR portal URL: `https://security.microsoft.com/incidents/{ProviderIncidentId}?tid=<tenant_id>`. See [Tenant ID in Portal URLs](#tenant-id-in-portal-urls--global-rule).
 
 8. **⛔ MANDATORY: Query File Recommendations (tiered)** — After rendering the main report body (Dashboard Summary through Recommended Actions), append the [Query File Recommendations](#query-file-recommendations) section. This runs AFTER the report is visible to the user — not as a blocking gate. Skip only when ALL verdicts are ✅.
 
@@ -412,7 +414,7 @@ EmailEvents
 **💻 Single Device — direct portal link:**
 When acting on a **single device**, link directly to its Defender XDR machine page. The `DeviceId` comes from the `DeviceInfo` table or `GetDefenderMachine` API (already retrieved during `computer-investigation` drill-down).
 
-`[<DeviceName>](https://security.microsoft.com/machines/v2/<MDE_DeviceId>)`
+`[<DeviceName>](https://security.microsoft.com/machines/v2/<MDE_DeviceId>?tid=<tenant_id>)`
 
 → Machine page → *Response actions* → Isolate device, Collect investigation package, Run antivirus scan, Initiate investigation, Restrict app execution
 
@@ -492,13 +494,13 @@ DeviceNetworkEvents
 
 | Entity | URL Pattern | Example |
 |--------|------------|---------|
-| **User** | `https://security.microsoft.com/user?aad=<OID>&upn=<UPN>&tab=overview` | `[user@contoso.com](https://security.microsoft.com/user?aad=<OID>&upn=user@contoso.com&tab=overview)` |
-| **Domain** | `https://security.microsoft.com/domains/overview?urlDomain=<domain>` | `[contoso.com](https://security.microsoft.com/domains/overview?urlDomain=contoso.com)` |
-| **URL** | `https://security.microsoft.com/url/overview?url=<url-encoded-URL>` | `[example.com/path](https://security.microsoft.com/url/overview?url=http%3A%2F%2Fexample.com%2Fpath)` |
-| **IP** | `https://security.microsoft.com/ip/<IP>/overview` | `[<IP>](https://security.microsoft.com/ip/<IP>/overview)` |
-| **File Hash** | `https://security.microsoft.com/file/<SHA1-or-SHA256>/` | `[da5e459...b1bb1e](https://security.microsoft.com/file/da5e45915354850261cf0e87dc7af19597b1bb1e/)` |
-| **Device** | `https://security.microsoft.com/machines/v2/<MDE_DeviceId>` | `[alpine-srv1](https://security.microsoft.com/machines/v2/6b02befec5724a3b79184d006ac417eda6fb05a6)` |
-| **SPN / Non-Human Identity** | `https://security.microsoft.com/identity-inventory?tab=NonHumanIdentities` | `[Non-Human Identities Inventory](https://security.microsoft.com/identity-inventory?tab=NonHumanIdentities)` |
+| **User** | `https://security.microsoft.com/user?aad=<OID>&upn=<UPN>&tab=overview&tid=<tenant_id>` | `[user@contoso.com](https://security.microsoft.com/user?aad=<OID>&upn=user@contoso.com&tab=overview&tid=<tenant_id>)` |
+| **Domain** | `https://security.microsoft.com/domains/overview?urlDomain=<domain>&tid=<tenant_id>` | `[contoso.com](https://security.microsoft.com/domains/overview?urlDomain=contoso.com&tid=<tenant_id>)` |
+| **URL** | `https://security.microsoft.com/url/overview?url=<url-encoded-URL>&tid=<tenant_id>` | `[example.com/path](https://security.microsoft.com/url/overview?url=http%3A%2F%2Fexample.com%2Fpath&tid=<tenant_id>)` |
+| **IP** | `https://security.microsoft.com/ip/<IP>/overview?tid=<tenant_id>` | `[<IP>](https://security.microsoft.com/ip/<IP>/overview?tid=<tenant_id>)` |
+| **File Hash** | `https://security.microsoft.com/file/<SHA1-or-SHA256>/?tid=<tenant_id>` | `[da5e459...b1bb1e](https://security.microsoft.com/file/da5e45915354850261cf0e87dc7af19597b1bb1e/?tid=<tenant_id>)` |
+| **Device** | `https://security.microsoft.com/machines/v2/<MDE_DeviceId>?tid=<tenant_id>` | `[alpine-srv1](https://security.microsoft.com/machines/v2/6b02befec5724a3b79184d006ac417eda6fb05a6?tid=<tenant_id>)` |
+| **SPN / Non-Human Identity** | `https://security.microsoft.com/identity-inventory?tab=NonHumanIdentities&tid=<tenant_id>` | `[Non-Human Identities Inventory](https://security.microsoft.com/identity-inventory?tab=NonHumanIdentities&tid=<tenant_id>)` |
 
 **User fallbacks:** `?upn=<UPN>` when ObjectId is unavailable; `?sid=<SID>&accountName=<Name>&accountDomain=<Domain>` for on-prem AD.
 
@@ -510,10 +512,10 @@ DeviceNetworkEvents
 
 | Context | Treatment | Example |
 |---------|-----------|----------|
-| **Action / recommendation / Take Action table** | Wrap entity name in Defender XDR portal link. Do NOT defang. | `[evil.com](https://security.microsoft.com/domains/overview?urlDomain=evil.com)` |
+| **Action / recommendation / Take Action table** | Wrap entity name in Defender XDR portal link. Do NOT defang. | `[evil.com](https://security.microsoft.com/domains/overview?urlDomain=evil.com&tid=<tenant_id>)` |
 | **Data / results table showing raw query output** | Defang the entity. Do NOT link to portal. | `evil[.]com` |
 
-⛔ **Action tables: use portal links, NOT defanging.** Writing `evil[.]com` in an action table is wrong — write `[evil.com](https://security.microsoft.com/domains/overview?urlDomain=evil.com)` instead. The markdown link target points to `security.microsoft.com`, so VS Code won't auto-linkify to the malicious domain. If you see `[.]` in an Entity cell, you applied the wrong rule.
+⛔ **Action tables: use portal links, NOT defanging.** Writing `evil[.]com` in an action table is wrong — write `[evil.com](https://security.microsoft.com/domains/overview?urlDomain=evil.com&tid=<tenant_id>)` instead. The markdown link target points to `security.microsoft.com`, so VS Code won't auto-linkify to the malicious domain. If you see `[.]` in an Entity cell, you applied the wrong rule.
 
 ⛔ **Data tables: use defanging, NOT portal links.** Writing bare `evil.com` in a results table is wrong — VS Code auto-linkifies it. Write `evil[.]com` instead.
 
@@ -537,28 +539,22 @@ DeviceNetworkEvents
 
 | Rule | Status |
 |------|--------|
+| Action table with plain-text entities instead of clickable portal links | ❌ **PROHIBITED** |
+| Defanging entities (`[.]`) in action tables instead of portal links | ❌ **PROHIBITED** |
+| Adding a separate "Portal" column instead of making the entity name the link | ❌ **PROHIBITED** |
+| Raw (non-defanged) malicious URLs/domains as plain text in results tables | ❌ **PROHIBITED** |
+| AH query for a single entity when a direct portal link suffices | ❌ **PROHIBITED** |
 | Non-✅ drill-down surfaces actionable entities but no Take Action block | ❌ **PROHIBITED** |
 | Take Action query missing a required column | ❌ **PROHIBITED** |
-| Email Take Action query using `project` (strips columns needed by Submit to Microsoft / Initiate Automated Investigation) | ❌ **PROHIBITED** |
-| AH query for a single user when ObjectId is known (use direct portal links instead) | ❌ **PROHIBITED** |
-| AH query for a single device when MDE DeviceId is known (use direct machine page link instead) | ❌ **PROHIBITED** |
-| AH query for a single IP/domain/hash when a direct portal link suffices | ❌ **PROHIBITED** |
-| Action table with plain-text entities (UPNs, domains, URLs, IPs, hashes) instead of clickable Defender XDR portal links | ❌ **PROHIBITED** |
-| Defanging entities (`[.]`) in action/recommendation tables instead of wrapping in portal links | ❌ **PROHIBITED** |
-| Adding a separate "Portal" column instead of making the entity name itself the clickable link | ❌ **PROHIBITED** |
-| Displaying raw (non-defanged) malicious URLs/domains as plain text in results tables | ❌ **PROHIBITED** |
-| Single user/device: direct portal link + PowerShell commands | ✅ **REQUIRED** |
-| Bulk entities (2+ emails, devices, indicators): AH query with Take actions | ✅ **REQUIRED** |
-| Every `🎬 Take Action` heading followed by the warning: `> ⚠️ **AI-generated content may be incorrect. Always review Take Action queries and portal links for accuracy before executing remediation actions.**` | ✅ **REQUIRED** |
-| Rendering a `🎬 Take Action` section without the AI-generated content warning immediately below the heading | ❌ **PROHIBITED** |
-| Bulk indicator (2+ IPs/domains/hashes) Take Action block includes AH query that surfaces values as clickable columns | ✅ **REQUIRED** |
-| Describing "Add indicator" action without providing the AH query that surfaces the values in results | ❌ **PROHIBITED** |
-| AH query in Take Action without a copyable KQL code block (` ```kql `) | ❌ **PROHIBITED** |
-| AH query in Take Action without a `Run in Advanced Hunting` deep link | ❌ **PROHIBITED** |
-| Every AH query in Take Action includes BOTH a ` ```kql ` code block AND a clickable deep link | ✅ **REQUIRED** |
-| Manually base64-encoding KQL to build an AH deep link URL (breaks portal — wrong encoding) | ❌ **PROHIBITED** |
-| Using double-quoted here-strings (`@"..."@`) when writing KQL to temp files (corrupts `$` in KQL) | ❌ **PROHIBITED** |
-| Using `python scripts/kql_to_ah_url.py --md --file temp/q.kql` with single-quoted here-strings for EVERY AH deep link | ✅ **REQUIRED** |
+| Email Take Action query using `project` (strips columns needed by portal actions) | ❌ **PROHIBITED** |
+| `🎬 Take Action` heading without the AI-generated content warning immediately below | ❌ **PROHIBITED** |
+| AH query in Take Action without BOTH a ` ```kql ` code block AND a deep link | ❌ **PROHIBITED** |
+| Manually base64-encoding KQL for AH deep links (wrong encoding — use `kql_to_ah_url.py`) | ❌ **PROHIBITED** |
+| Using double-quoted here-strings (`@"..."@`) when writing KQL to temp files | ❌ **PROHIBITED** |
+| Single entity: direct portal link + PowerShell commands | ✅ **REQUIRED** |
+| Bulk entities (2+): AH query with Take actions, values as clickable columns | ✅ **REQUIRED** |
+| Every `🎬 Take Action` heading followed by: `> ⚠️ **AI-generated content may be incorrect. Always review Take Action queries and portal links for accuracy before executing remediation actions.**` | ✅ **REQUIRED** |
+| AH deep links generated via `python scripts/kql_to_ah_url.py --md --file temp/q.kql` with single-quoted here-strings | ✅ **REQUIRED** |
 
 ---
 
@@ -626,7 +622,7 @@ OpenIncidents
     datetime_diff('minute', now(), CreatedTime) < 60, strcat(datetime_diff('minute', now(), CreatedTime), "m ago"),
     datetime_diff('hour', now(), CreatedTime) < 24, strcat(datetime_diff('hour', now(), CreatedTime), "h ago"),
     strcat(datetime_diff('day', now(), CreatedTime), "d ago"))
-| extend PortalUrl = strcat("https://security.microsoft.com/incidents/", ProviderIncidentId)
+| extend PortalUrl = strcat("https://security.microsoft.com/incidents/", ProviderIncidentId, "?tid=<TENANT_ID>")
 | extend TotalHighCritical = TotalHighCritical, TotalAll = TotalAll
 | project TotalHighCritical, TotalAll, ProviderIncidentId, Title, Severity, SevRank, AgeDisplay, AlertCount, 
     OwnerUPN, Tactics, Techniques, Accounts, Devices, Tags, PortalUrl, AlertNames, CreatedTime
@@ -754,7 +750,7 @@ IdentityPosture
                                          "&accountDomain=", AccountDomain),
             isnotempty(AccountUpn), strcat("upn=", AccountUpn),
             ""),
-        "&tab=overview")
+        "&tab=overview&tid=<TENANT_ID>")
 | project DisplayName, PortalUrl, RiskScore, RiskLevel, RiskStatus, CriticalityLevel,
     RiskDetections = coalesce(RiskDetections, long(0)),
     HighCount = coalesce(HighCount, long(0)),
@@ -1373,7 +1369,7 @@ Insert `📂 Recommended Query Files` section after **Recommended Actions** in t
 
 1. **Header:** `# 🔍 Threat Pulse — <Workspace> | <Date>` with workspace ID, scan duration, query count
 2. **Dashboard Summary:** 12-row table — one row per query (Q1, Q2, Q3, Q4–Q12), columns: `#`, `Domain`, `Status` (verdict emoji), `Key Finding` (1-line). Verdicts: 🔴 Escalate | 🟠 Investigate | 🟡 Monitor | ✅ Clear | 🔵 Informational | ❓ No Data
-3. **Detailed Findings:** One section per query — EVERY query gets a section (no skipping). Data tables (max 10 rows inline, unlimited in file). Q1 incidents must include `[#<id>](https://security.microsoft.com/incidents/<ProviderIncidentId>)` links. Q2 closed summary always renders after Q1.
+3. **Detailed Findings:** One section per query — EVERY query gets a section (no skipping). Data tables (max 10 rows inline, unlimited in file). Q1 incidents must include `[#<id>](https://security.microsoft.com/incidents/<ProviderIncidentId>?tid=<tenant_id>)` links. Q2 closed summary always renders after Q1.
 4. **Cross-Query Correlations:** Table of correlated findings per Post-Processing rules, or `✅ No correlations detected`.
 5. **🎯 Recommended Actions:** Prioritized table with action, trigger query, and drill-down skill.
 6. **📂 Recommended Query Files:** Per the Report Output Block procedure above. For 🟡-only verdicts, use "📂 Proactive Hunting Suggestions" header instead. Omit entirely when all ✅.

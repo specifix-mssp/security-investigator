@@ -435,14 +435,27 @@ Incident investigation and threat hunting tools for Defender XDR and Sentinel:
 
 **These rules apply to ALL SecurityIncident queries, not just Triage MCP interactions.**
 
-Every SecurityIncident query MUST include `ProviderIncidentId` in the output and every incident presented to the user MUST include a clickable Defender XDR portal URL: `https://security.microsoft.com/incidents/{ProviderIncidentId}`.
+Every SecurityIncident query MUST include `ProviderIncidentId` in the output and every incident presented to the user MUST include a clickable Defender XDR portal URL: `https://security.microsoft.com/incidents/{ProviderIncidentId}?tid=<tenant_id>` (read `tenant_id` from `config.json`; omit `?tid=` if not configured).
 
 | Action | Status |
 |--------|--------|
 | Querying SecurityIncident without projecting `ProviderIncidentId` | ❌ **PROHIBITED** |
 | Presenting incidents to user without Defender XDR portal URL | ❌ **PROHIBITED** |
 | Using `IncidentNumber` as the primary identifier in output | ❌ **PROHIBITED** |
-| Including clickable `https://security.microsoft.com/incidents/{ProviderIncidentId}` link | ✅ **REQUIRED** |
+| Including clickable `https://security.microsoft.com/incidents/{ProviderIncidentId}?tid=<tenant_id>` link | ✅ **REQUIRED** |
+
+### 🔗 Tenant ID in Portal URLs — GLOBAL RULE
+
+**ALL `security.microsoft.com` URLs** generated in output MUST include the `tid` query parameter for reliable cross-tenant deep linking. Read `tenant_id` from `config.json`.
+
+| URL has existing query params? | Append |
+|-------------------------------|--------|
+| No query string | `?tid=<tenant_id>` |
+| Has `?` already | `&tid=<tenant_id>` |
+
+**If `tenant_id` is not configured** (missing, empty, or placeholder `YOUR_*`): omit `tid` entirely.
+
+This applies to: incident links, entity links (user, domain, IP, device, file hash), AH deep links (`kql_to_ah_url.py` handles this automatically). KQL `strcat()` patterns must substitute the `tenant_id` value at query time.
 
 
 ### 🔧 Tool Selection Rule: Data Lake vs Advanced Hunting
@@ -610,7 +623,7 @@ SecurityIncident
 | summarize Title = any(Title), Severity = any(Severity), Status = any(Status),
     Classification = any(Classification), CreatedTime = any(CreatedTime)
     by ProviderIncidentId
-| extend PortalUrl = strcat("https://security.microsoft.com/incidents/", ProviderIncidentId)
+| extend PortalUrl = strcat("https://security.microsoft.com/incidents/", ProviderIncidentId, "?tid=<TENANT_ID>")
 | order by CreatedTime desc
 ```
 
@@ -743,6 +756,8 @@ Every AH query in a `🎬 Take Action` block MUST include **both**:
 2. A **clickable deep link** immediately after the code block — for one-click convenience
 
 The deep link is a convenience shortcut, NOT a replacement for the code block. If the link breaks (encoding issues, session state, browser quirks), the analyst needs the raw KQL.
+
+**Tenant ID:** `kql_to_ah_url.py` automatically reads `tenant_id` from `config.json` and appends `&tid=<tenant_id>` to the AH URL. Use `--no-tid` to suppress. Use `--tid <GUID>` to override.
 
 **⚠️ PowerShell here-string pitfall:** Double-quoted here-strings (`@"..."@`) expand `$variables` and can silently corrupt KQL containing `$` (common in KQL `let` statements). **Always use single-quoted here-strings (`@'...'@`)** when writing KQL to temp files.
 
