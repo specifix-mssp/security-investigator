@@ -4,7 +4,7 @@
 # Slim version: title, path, domains, mitre, prompt only.
 # Use --full flag to generate the verbose manifest with tables, keywords, platform, timeframe.
 
-generated: '2026-04-16T17:41:49Z'
+generated: '2026-04-16T17:58:56Z'
 valid_domains:
 - admin
 - cloud
@@ -321,6 +321,20 @@ queries:
   - T1190
   - T1203
   - T1068
+- title: Attack Disruption & Endpoint Logon Forensics
+  path: queries/endpoint/device_logon_attack_disruption.md
+  domains:
+  - endpoint
+  - identity
+  mitre:
+  - T1021.001
+  - T1021.002
+  - T1110.001
+  - T1110.003
+  - T1550.002
+  - T1078.002
+  - TA0008
+  - TA0006
 - title: Defender for Endpoint - Failed Connections & Logon Attempts
   path: queries/endpoint/endpoint_failed_connections.md
   domains:
