@@ -641,6 +641,31 @@ python enrich_ips.py 8.8.8.8    # Verifies IP enrichment API tokens
 
 ---
 
+## 🧠 (Optional) Persistent Tenant Context
+
+GitHub Copilot Chat in VS Code provides agents with a **`memory` tool** — a built-in filesystem (`/memories/`) for persisting notes across conversations. Copilot already uses this internally; you can extend it with tenant-specific context (known infrastructure IPs, validated personnel, false-positive patterns, lab automation signatures) so investigations don't repeatedly mis-classify documented activity as 🔴 critical.
+
+Two memory tiers are relevant:
+
+| Tier | Path | Auto-loaded? | Use for |
+|---|---|---|---|
+| **User memory** | `/memories/*.md` | ✅ Yes (~200 lines) | Short trigger rules ("when you see tenant X, read repo file Y") |
+| **Repo memory** | `/memories/repo/*.md` | ❌ Filenames only | Rich tenant context (IPs, personnel, FP patterns) — pulled in by trigger rules |
+
+> The memory tool is an internal agent capability — VS Code does not publish a dedicated docs page for it. Closest related concepts are [custom instructions](https://code.visualstudio.com/docs/copilot/customization/custom-instructions) and [Agent Skills](https://code.visualstudio.com/docs/copilot/customization/agent-skills), which serve different purposes (always-applied conventions and specialized workflows, respectively).
+
+**This workspace ships with:**
+
+- **Templates** in [`notes/memory/examples/`](notes/memory/examples/) — copy and adapt for your tenant (one user-tier example, two repo-tier examples)
+- **Sync script** [`scripts/sync-repo-memory.ps1`](scripts/sync-repo-memory.ps1) — backs up workspace-scoped (`repo`) memory from VS Code AppData into the workspace folder, surviving VS Code reinstall and workspace rename. Any cloud sync attached to your workspace (OneDrive, Dropbox, iCloud, etc.) then mirrors the backup across machines. Defaults to one-way export (`ToBackup`); restore mode (`FromBackup`) requires `-Force` because it writes into Copilot's trusted memory store.
+- **Setup guide** [`notes/memory/README.md`](notes/memory/README.md) — full walkthrough, sync usage, security model, and the trigger-rule pattern that makes Copilot actually consult repo memory
+
+**Quickstart:** Open a template from `notes/memory/examples/`, then ask Copilot in chat to *"create this as a memory file at `/memories/...`, replacing placeholders with my tenant values."* Copilot uses its `memory` tool to write it directly — no AppData path navigation needed.
+
+> ⚠️ **Memory = trusted input.** Anything in `notes/memory/repo/` becomes authoritative instructions for Copilot in every future chat (with MCP tool access to Sentinel, Graph, Azure). Review diffs from forks/PRs before restoring, never paste secrets, and if your workspace is cloud-synced, confirm the destination is acceptable for security context. See [`notes/memory/README.md`](notes/memory/README.md#%EF%B8%8F-security-memory-is-trusted-input) for the full threat model.
+
+---
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE). Use it, fork it, adapt it for your SOC — just keep the copyright notice.

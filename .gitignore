@@ -32,7 +32,13 @@ authoring/
 drafts/
 
 # Personal notes (not for repo)
-notes/
+notes/*
+# ...except for memory backup README and example templates (safe to publish)
+!notes/memory/
+notes/memory/*
+!notes/memory/README.md
+!notes/memory/examples/
+!notes/memory/examples/**
 
 # IDE
 .vscode/*
