@@ -310,28 +310,30 @@ EmailEvents
 
 ## Query 7: No-Attachment + URL Phish — Body-Embedded QR Proxy
 
-The Q1 2026 article reports **body-embedded QR codes surged 336% in March**. There is no native MDO `DetectionMethod` for "body-embedded QR" in `EmailEvents`, so this query uses a **structural proxy**: inbound emails classified as Phish where `AttachmentCount == 0` but `UrlCount > 0`. Body-embedded QR codes are typically delivered as inline images referencing an external host — and the underlying URL is what MDO's Phish detection actually evaluates.
+The Q1 2026 article reports **body-embedded QR codes surged 336% in March**. There is no native MDO `DetectionMethod` for "body-embedded QR" in `EmailEvents`, so this query uses a **structural proxy**: inbound emails classified as Phish where `AttachmentCount == 0` but `UrlCount > 0`, **filtered to URL-evaluation detection methods only** (`URL detonation`, `URL malicious reputation`, `URL detonation reputation`). This is the high-signal subset where MDO actually scanned/detonated the URL — the same code path that evaluates the link behind a body-embedded QR image. Without this filter, the broader `ThreatTypes has "Phish"` predicate also returns sender-identity detections (`Spoof DMARC`, `Spoof external domain`, `Impersonation brand`, generic `Advanced filter` ML hits) that have no URL-evaluation relevance and inflate volume by ~10–15×.
 
 <!-- cd-metadata
 cd_ready: true
 schedule: "3H"
 category: "InitialAccess"
-title: "Inbound zero-attachment phishing email with embedded URL — possible body-embedded QR"
+title: "Inbound zero-attachment URL-phish (URL detonated/known-bad) — possible body-embedded QR"
 impactedAssets:
   - type: "mailbox"
     identifier: "recipientEmailAddress"
 recommendedActions: "Render the email in Threat Explorer to confirm whether body contains an inline QR image. If so, notify the recipient that mobile QR scans bypass email Safe Links and check for any subsequent sign-in anomaly from a mobile device."
-adaptation_notes: "AH-native. Structural proxy (no native QR detection method on EmailEvents). The 'no attachment + URL + phish' pattern catches both true body-embedded QR campaigns and traditional link-based phish - distinguishing them requires Threat Explorer rendering."
+adaptation_notes: "AH-native. Structural proxy (no native QR detection method on EmailEvents). Filtered to URL-evaluation DetectionMethods only - excludes sender-identity (Spoof DMARC, Impersonation brand) and generic ML content detections that are not URL-evaluation events."
 -->
 ```kql
 // Q1 2026 Email Threat Landscape: No-attachment + URL phish (body-embedded QR proxy)
 let lookback = 30d;
+let urlDetectionMarkers = dynamic(["URL detonation","URL malicious reputation","URL detonation reputation"]);
 EmailEvents
 | where Timestamp > ago(lookback)
 | where EmailDirection == "Inbound"
 | where ThreatTypes has "Phish"
 | where AttachmentCount == 0
 | where UrlCount > 0
+| where DetectionMethods has_any (urlDetectionMarkers)
 | project Timestamp, NetworkMessageId, SenderFromAddress, SenderIPv4, RecipientEmailAddress,
           Subject, UrlCount, DeliveryAction, DetectionMethods, ThreatNames
 | order by Timestamp desc
@@ -339,9 +341,11 @@ EmailEvents
 ```
 
 **Tuning:**
-- **Focus on Delivered:** `| where DeliveryAction == "Delivered"` — these are the messages your users actually saw.
+- The default `urlDetectionMarkers` filter is the primary noise control — it isolates messages where MDO actually evaluated the URL (the same code path that fires on a URL hidden behind a QR image). Removing this filter inflates results by ~10–15×, dominated by sender-identity and generic ML detections that are unrelated to body-embedded URLs/QRs.
+- **Focus on Delivered:** `| where DeliveryAction == "Delivered"` — these are the messages your users actually saw and are the highest-priority follow-up set.
+- **High-confidence only:** `| where ConfidenceLevel has "\"Phish\":\"High\""` further narrows to the subset MDO is most certain about.
 - Pair with mobile sign-in anomalies (`SigninLogs` with `DeviceDetail.operatingSystem` in iOS/Android) for the recipient within 60 minutes — strongest body-embedded-QR compromise indicator.
-- Many true positives from this query are **standard link phishing**, not QR-specific. The technique distinction matters for user awareness messaging but not for triage priority.
+- Even with the URL-evaluation filter, some matches will be **standard link phishing** (a malicious URL inline in a normal phish message body), not QR-specific. Rendering the email in Threat Explorer is the only way to distinguish QR-image delivery from text-link delivery; both are worth triaging.
 
 ---
 
