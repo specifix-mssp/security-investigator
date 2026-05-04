@@ -4,7 +4,7 @@
 # Slim version: title, path, domains, mitre, prompt only.
 # Use --full flag to generate the verbose manifest with tables, keywords, platform, timeframe.
 
-generated: '2026-05-01T15:22:05Z'
+generated: '2026-05-04T15:51:23Z'
 valid_domains:
 - admin
 - cloud
@@ -728,3 +728,18 @@ queries:
   - TA0005
   - TA0006
   - TA0040
+- title: Code of Conduct AiTM Phishing Campaign — TTPs & IOCs
+  path: queries/threat-intelligence/2026-05/code_of_conduct_aitm_phishing.md
+  domains:
+  - email
+  - identity
+  mitre:
+  - T1566.001
+  - T1566.002
+  - T1204.001
+  - T1204.002
+  - T1539
+  - T1078
+  - T1556.006
+  - TA0001
+  - TA0006
