@@ -4,7 +4,7 @@
 # Slim version: title, path, domains, mitre, prompt only.
 # Use --full flag to generate the verbose manifest with tables, keywords, platform, timeframe.
 
-generated: '2026-05-04T15:51:23Z'
+generated: '2026-05-12T21:19:57Z'
 valid_domains:
 - admin
 - cloud
@@ -743,3 +743,23 @@ queries:
   - T1556.006
   - TA0001
   - TA0006
+- title: Trusted Third-Party Intrusion (HPE OA / HPOM Abuse) — TTPs & Hunting
+  path: queries/threat-intelligence/2026-05/trusted_third_party_intrusion.md
+  domains:
+  - endpoint
+  - identity
+  mitre:
+  - T1199
+  - T1078
+  - T1556.002
+  - T1556.008
+  - T1505.003
+  - T1059.001
+  - T1059.005
+  - T1547.005
+  - T1572
+  - T1021.001
+  - T1047
+  - T1016
+  - T1018
+  - T1083
