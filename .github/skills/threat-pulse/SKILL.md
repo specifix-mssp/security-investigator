@@ -69,6 +69,11 @@ The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the
 | 🟡 (no 🔴/🟠) | Top 1–2, broader prompts | Up to 3 posture skills | `📂 Proactive Hunting Suggestions` |
 | All ✅ | Skip | Skip | Omit entirely |
 
+10. **⛔ MANDATORY: The follow-up loop is stateful, memory-backed, and self-sustaining.** Three non-negotiable invariants that hold for the ENTIRE session (re-read this rule before any follow-up interaction):
+   - **(a) Memory is the source of truth, not the conversation.** The prompt pool lives ONLY in `/memories/session/threat-pulse-drilldowns.md`. It MUST be created the first time the pool is built (Phase 4 step 1) and is a hard precondition for rendering any selection list. If you are about to present follow-up options and this file does not exist, STOP and create it first. NEVER reconstruct the pool from conversation history — always `memory view` immediately before each `vscode_askQuestions` call.
+   - **(b) The loop re-presents itself automatically.** After EVERY completed drill-down, you MUST return to Phase 4 step 2 and call `vscode_askQuestions` again with the updated pool — without waiting for the user to ask for the menu. The only exits are the user selecting `Skip`, or an empty pool. "Bring the menu back up" should never be something the user has to request.
+   - **(c) The Quick Pick Call Contract is mechanical, not advisory.** Run the [Pre-Flight Checklist](#-pre-flight-checklist--run-mechanically-before-every-vscode_askquestions-call) and print the Pool Receipt line before every call. In particular: ZERO `recommended` keys, `multiSelect: true`, correct icon taxonomy (`🔍 📄 🎯 💾 🆕 🔄 📋`), and the `💾 / 🔄 / Skip` tail every iteration. Do not substitute an ad-hoc "Done" option for the contracted tail.
+
 ---
 
 ## Execution Workflow
@@ -143,6 +148,8 @@ The Threat Pulse skill is a rapid, broad-spectrum security scan designed for the
 **After rendering the report, present the user with a selectable list of follow-up actions — skill investigations, query file hunts, and IOC lookups.** Runs when at least one 🔴, 🟠, or 🟡 verdict exists (skip only when ALL verdicts are ✅).
 
 **This is a loop, not a one-shot.** After each action completes, re-present the selection list with the prompt pool updated. Tier depth (🔴/🟠 vs 🟡-only vs all ✅) follows Rule 8.
+
+> **⛔ Loop invariant — verify before EVERY iteration (per Rule 10):** (a) `/memories/session/threat-pulse-drilldowns.md` exists and was just re-read via `memory view` — if not, create/read it first; (b) you are re-presenting the menu *automatically* after the prior drill-down, not because the user asked; (c) the Pre-Flight Checklist passed and the Pool Receipt was printed. If any of the three is false, fix it before calling `vscode_askQuestions`. The loop only ends on `Skip` or an empty pool.
 
 **Prompt types (three categories, one unified list):**
 
