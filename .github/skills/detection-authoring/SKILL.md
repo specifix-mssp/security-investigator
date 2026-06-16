@@ -32,7 +32,7 @@ This skill deploys **custom detection rules** to Microsoft Defender XDR via the 
 6. **[Batch Deployment](#batch-deployment)** — Manifest-driven multi-rule deployment
 7. **[Lifecycle Management](#lifecycle-management)** — CRUD operations
 8. **[Existing Rule Discovery](#existing-rule-discovery)** — Search Analytic Rules & Custom Detections by table, EventID, or keyword
-9. **[Known Pitfalls](#known-pitfalls)** — Lessons learned (13 pitfalls documented)
+9. **[Known Pitfalls](#known-pitfalls)** — Lessons learned (18 pitfalls documented)
 10. **[CD Metadata Contract](#cd-metadata-contract)** — Schema for query file ↔ detection skill coordination
 
 ---
@@ -212,9 +212,12 @@ DELETE /beta/security/rules/detectionRules/{id}      — Delete
 
 ### Alert Category Values
 
-Valid MITRE ATT&CK tactic names (title case):
+`category` is a **case-sensitive, single-value, server-validated enum** accepting two groups:
 
-`InitialAccess`, `Execution`, `Persistence`, `PrivilegeEscalation`, `DefenseEvasion`, `CredentialAccess`, `Discovery`, `LateralMovement`, `Collection`, `Exfiltration`, `CommandAndControl`, `Impact`, `Reconnaissance`, `ResourceDevelopment`
+- **MITRE tactics** (title case): `InitialAccess`, `Execution`, `Persistence`, `PrivilegeEscalation`, `DefenseEvasion`, `CredentialAccess`, `Discovery`, `LateralMovement`, `Collection`, `Exfiltration`, `CommandAndControl`, `Impact`, `Reconnaissance`, `ResourceDevelopment`
+- **Non-tactic threat categories**: `Malware`, `Ransomware`, `SuspiciousActivity`, `UnwantedSoftware` — these **hide the MITRE techniques field** in the portal ([MS Learn](https://learn.microsoft.com/defender-xdr/custom-detection-rules#2-create-new-rule-and-provide-alert-details)); prefer a tactic when you want techniques to display.
+
+> **Portal label note:** The portal labels this control **"Tactic"** (UX rename, 2026), but the **API field stays `category`** — single-value, automation unaffected. Validation details in [Pitfall 18](#pitfall-18-category-and-mitretechniques-are-server-side-validated).
 
 ### Impacted Asset Types
 
@@ -969,6 +972,15 @@ $x = @(... | Sort-Object -Unique)
 |-----------|-------------------|------------------------|
 | Scheduled (1H+) | ✅ Accepted (preferred) | ✅ Accepted |
 | NRT (`"0"`) | ❌ **400 Bad Request** | ✅ Accepted (unnecessary) |
+
+### Pitfall 18: `category` and `mitreTechniques` Are Server-Side Validated
+
+Both fields are validated against fixed allowlists — invalid values return `400 Bad Request` (with **descriptive** messages, unlike [Pitfall 13](#pitfall-13-impactedassets-must-be-non-empty)), not silently accepted.
+
+- **`category`** — title-case and case-sensitive (`defenseevasion` → *"Invalid alert category."*), single-value (arrays rejected). Full accepted set in [Alert Category Values](#alert-category-values).
+- **`mitreTechniques`** — invalid IDs → *"Mitre techniques (...) are invalid."* The **accepted set tracks the tenant's ATT&CK version**: legacy IDs (e.g. `T1003.001`) always work; newer sub-techniques (e.g. `T1556.009`, `T1659`) work only on refreshed tenants (expanded set rolling out via preview as of June 2026).
+
+> **Fallback rule:** If a newer sub-technique returns *"Mitre techniques ... are invalid"*, fall back to the parent technique (`T1556.009` → `T1556`) or a legacy ID. Don't assume the newest ATT&CK values are available everywhere.
 
 ---
 
