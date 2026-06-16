@@ -7,6 +7,7 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyDirOnStart: false, // Don't delete server.js
+    target: "esnext",
     rollupOptions: {
       input: "mcp-app.html",
       output: {
