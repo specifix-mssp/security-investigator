@@ -75,6 +75,7 @@ All four share `EventSessionId` (1:1 with `AdditionalFields.ConversationId`), th
 | 1 | [Agent & Actor Inventory](#query-1-agent--actor-inventory) | Posture | `UnifiedAgentObservability` |
 | 2 | [Prompt Injection / Jailbreak Detection](#query-2-prompt-injection--jailbreak-detection) | Detection | `UnifiedAgentObservability` |
 | 3 | [Session Reconstruction — Prompts + Tool Calls](#query-3-session-reconstruction--prompts--tool-calls) | Investigation | `UnifiedAgentObservability` |
+| 3 | [b: Agent-Centric Session Reconstruction (all of one agent's convers...](#query-3b-agent-centric-session-reconstruction-all-of-one-agents-conversations) | Investigation | `UnifiedAgentObservability` |
 | 4 | [Tool Invocation Inventory per Agent](#query-4-tool-invocation-inventory-per-agent) | Posture | `UnifiedAgentObservability` |
 | 5 | [Tool Argument Audit (data-access tools)](#query-5-tool-argument-audit-data-access-tools) | Investigation | `UnifiedAgentObservability` |
 | 6 | [Tool Call Failures & Errors](#query-6-tool-call-failures--errors) | Investigation | `UnifiedAgentObservability` |
@@ -211,6 +212,104 @@ UnifiedAgentObservability
 **Expected results:** Chronological event stream. `InvokeAgent` rows show the message text (user prompt or agent reply); `InferenceCall` rows show the LLM turn; `ExecuteToolByGateway` / `ExecuteToolBySDK` rows show the called `ToolName` plus its request payload. A jailbreak the agent ignored will have `InvokeAgent` rows with no downstream tool calls touching sensitive surfaces.
 
 **Tuning:** Replace `TargetSession` with the session ID from Query 2 or 6. Pull full payloads from `EventOriginalRequestDetails` / `EventOriginalResultDetails` via `EventUid`.
+
+---
+
+### Query 3b: Agent-Centric Session Reconstruction (all of one agent's conversations)
+
+**Purpose:** Rebuild the full activity timeline for a **single named agent** across **all** the conversations it participated in over a window — interleaving user prompts, the agent's tool/connector calls, and its replies in one chronological stream. Unlike [Query 3](#query-3-session-reconstruction--prompts--tool-calls) (which drills into one known `EventSessionId`), this pivots from an **agent name** and stitches its conversations together. Ideal for "show me everything this agent did" forensic reviews and tool-usage auditing.  
+**Severity:** Informational  
+**MITRE:** TA0007  
+
+> **⚠️ Applicability — agents that emit `ExecuteToolByGateway` tool calls.** "Gateway" here is a **tool-execution path**, not an agent type: the Agent 365 observability schema tags each tool call as one of three flavors (see table below). This query keys on the `ExecuteToolByGateway` flavor plus a real `SrcAgentBlueprintId`, and stitches the zero-GUID user prompts back to the agent via `EventOriginalRequestDetails.conversation.Id`. That field path is populated **only** on the `InvokeAgent` rows of custom Agent365 agents whose tools run through the gateway runtime. It returns nothing for **M365 Copilot built-in (SDK)** agents (e.g. Researcher — zero blueprint, `ExecuteToolBySDK`) or **declarative / Copilot Studio** agents (zero blueprint, identified by `TargetAgentName`). For those classes, use the **generalized variant** in the Tuning note below.
+>
+> | `EventOriginalType` (`ActionType`) | Tool-execution path | Typical agent class |
+> |---|---|---|
+> | `ExecuteToolBySDK` | Tool runs **in-process**, instrumented by the Agent 365 SDK | M365 Copilot built-in (e.g. Researcher) |
+> | `ExecuteToolByGateway` | Tool call dispatched through the **Agent 365 gateway / Work IQ runtime** (first-party Graph-backed actions) | Custom Agent365 agents (real blueprint + SPN) |
+> | `ExecuteToolByMCPServer` | Tool call brokered through an **MCP server** | Any agent wired to an MCP server |
+>
+> All three are observed through the **same** Agent 365 OTel pipeline (`InvokeAgent` → `InferenceCall` → `ExecuteTool*` → output) — the distinction is *where the tool runs*, decided **per tool call**, so a single agent can in principle emit more than one flavor. ([Agent 365 observability concepts](https://learn.microsoft.com/microsoft-agent-365/developer/observability-concepts#where-your-data-shows-up))
+
+```kql
+let AgentName = "<AgentName>";                 // an agent with ExecuteToolByGateway tool calls (from Query 1 / Query 4)
+let Window = 7d;
+let zero = "00000000-0000-0000-0000-000000000000";
+// Resolve the agent's blueprint GUID from its name (no GUID hardcoding) —
+// SrcAgentBlueprintId is populated on the agent's ExecuteToolByGateway / InvokeAgent-reply rows.
+let AgentBlueprint = toscalar(
+    UnifiedAgentObservability
+    | where TimeGenerated > ago(Window)
+    | where SrcAgentName == AgentName and EventOriginalType == "ExecuteToolByGateway"
+    | where isnotempty(SrcAgentBlueprintId) and SrcAgentBlueprintId != zero
+    | take 1
+    | project SrcAgentBlueprintId);
+// Conversations this agent took part in (its replies carry conversation.Id)
+let AgentConvos =
+    UnifiedAgentObservability
+    | where TimeGenerated > ago(Window)
+    | where SrcAgentBlueprintId == AgentBlueprint and EventOriginalType == "InvokeAgent"
+    | extend ConversationId = tostring(parse_json(EventOriginalRequestDetails).conversation.Id)
+    | where isnotempty(ConversationId)
+    | distinct ConversationId;
+UnifiedAgentObservability
+| where TimeGenerated > ago(Window)
+| where EventOriginalType in ("InvokeAgent", "ExecuteToolByGateway")
+| extend P = parse_json(EventOriginalRequestDetails)
+| extend ConversationId = tostring(P.conversation.Id)
+// keep this agent's tool calls + replies (real blueprint) AND its user prompts (zero-GUID, matched by conversation)
+| where SrcAgentBlueprintId == AgentBlueprint
+     or (EventOriginalType == "InvokeAgent" and ConversationId in (AgentConvos))
+| extend Step = case(
+        EventOriginalType == "InvokeAgent" and SrcAgentBlueprintId == zero, "1 · 🗣️ USER PROMPT",
+        EventOriginalType == "ExecuteToolByGateway",                        "2 · 🧰 TOOL CALL",
+                                                                            "3 · 🤖 AGENT REPLY")
+| extend Detail = case(
+        EventOriginalType == "InvokeAgent",   tostring(P.text),
+        isnotempty(EventErrorDetails),        strcat("ERROR: ", EventErrorDetails),
+                                              tostring(EventOriginalResultDetails))
+| project TimeGenerated, Step, Tool = ToolName,
+          Conversation = ConversationId, Session = EventSessionId, Actor = ActorUsername,
+          Args   = iff(EventOriginalType == "ExecuteToolByGateway", substring(tostring(EventOriginalRequestDetails), 0, 300), ""),
+          Detail = substring(Detail, 0, 400)
+| sort by TimeGenerated asc
+```
+
+**Expected results:** A chronological, interleaved stream per conversation — `🗣️ USER PROMPT` (the message text in `Detail`), `🧰 TOOL CALL` (the `Tool` plus its JSON `Args`), and `🤖 AGENT REPLY` (the response in `Detail`). On tool rows the `Actor` is the agentic-user UPN; on prompt/reply rows it is the human's Teams MRI (`8:orgid:<guid>`). A flagged prompt followed by no tool calls in the same conversation is the "agent didn't act on it" signal.
+
+**Tuning:**
+- **Generalize to SDK / declarative agents** — swap the blueprint+`conversation.Id` logic for the universal `AdditionalFields.ConversationId` key (populated on **every** row) and match the agent by `SrcAgentName` **or** `TargetAgentName`:
+
+  ```kql
+  let AgentName = "<AgentName>";                 // any agent class
+  let Window = 7d;
+  let zero = "00000000-0000-0000-0000-000000000000";
+  let AgentConvos =
+      UnifiedAgentObservability
+      | where TimeGenerated > ago(Window)
+      | where SrcAgentName == AgentName or tostring(TargetAgentName) == AgentName
+      | extend ConvId = tostring(parse_json(tostring(AdditionalFields)).ConversationId)
+      | where isnotempty(ConvId)
+      | distinct ConvId;
+  UnifiedAgentObservability
+  | where TimeGenerated > ago(Window)
+  | extend ConvId = tostring(parse_json(tostring(AdditionalFields)).ConversationId)
+  | where ConvId in (AgentConvos)
+  | extend Step = case(
+          EventOriginalType == "InvokeAgent" and SrcAgentBlueprintId == zero, "1 · 🗣️ USER PROMPT",
+          EventOriginalType == "InvokeAgent",                                 "4 · 🤖 AGENT REPLY",
+          EventOriginalType == "InferenceCall",                               "·  🧠 LLM INFERENCE",
+          EventOriginalType startswith "ExecuteTool",                         "2 · 🧰 TOOL CALL",
+                                                                              EventOriginalType)
+  | project TimeGenerated, Step, EventOriginalType, Tool = ToolName, Conversation = ConvId,
+            Actor  = ActorUsername,
+            Detail = substring(iif(EventOriginalType == "InvokeAgent", tostring(parse_json(EventOriginalRequestDetails).text), tostring(EventOriginalResultDetails)), 0, 400)
+  | sort by TimeGenerated asc
+  ```
+
+  This variant also folds in `InferenceCall` (token/LLM turns) and `ExecuteToolBySDK`, so it works for built-in (Researcher) and declarative (Copilot Studio) agents — though those classes typically show `InferenceCall` + SDK tool rows rather than gateway tool calls.
+- Narrow to one conversation by appending `| where Conversation == "<ConversationId>"`.
+- Set `Window` to your incident scope; widen if the agent is low-traffic.
 
 ---
 

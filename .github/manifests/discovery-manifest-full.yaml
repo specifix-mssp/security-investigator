@@ -3,7 +3,7 @@
 #
 # Full manifest with all fields (tables, keywords, mitre, domains, platform, timeframe).
 
-generated: '2026-06-23T02:38:16Z'
+generated: '2026-06-23T03:42:43Z'
 valid_domains:
 - admin
 - cloud
